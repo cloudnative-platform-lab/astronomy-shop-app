@@ -122,6 +122,7 @@ jobs:
           docker build \
             -f "${DOCKERFILE_PATH}" \
             -t "${IMAGE_URI}" \
+            src/product-catalog
 
       # ---------------- IMAGE SCAN ----------------
       - name: Trivy image scan
