@@ -288,3 +288,6 @@ jobs:
         with:
           commit_message: "[CI] Promote product-catalog to ${{ inputs.promote_to }}"
           file_pattern: gitops/helm-values/**/product-catalog-values.yaml
+
+
+#testing
