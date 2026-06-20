@@ -303,3 +303,6 @@ jobs:
         with:
           commit_message: '[CI] Promote recommendation to ${{ inputs.promote_to }}'
           file_pattern: gitops/helm-values/**/recommendation-values.yaml
+
+
+#teesting
