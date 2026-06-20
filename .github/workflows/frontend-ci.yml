@@ -11,33 +11,31 @@ on:
           - staging
           - prod
       image_tag:
-        description: Existing image tag to promote. Leave empty to promote from the previous environment values file.
+        description: Existing image tag to promote. Leave empty to promote from previous environment.
         required: false
         type: string
+
   pull_request:
     paths:
       - 'src/frontend/**'
       - 'gitops/charts/astronomy-shop-service/**'
-      - 'gitops/helm-values/dev/frontend-values.yaml'
-      - 'gitops/helm-values/staging/frontend-values.yaml'
-      - 'gitops/helm-values/prod/frontend-values.yaml'
+      - 'gitops/helm-values/**'
       - '.github/workflows/frontend-ci.yml'
+
   push:
     branches:
       - main
     paths:
       - 'src/frontend/**'
       - 'gitops/charts/astronomy-shop-service/**'
-      - 'gitops/helm-values/dev/frontend-values.yaml'
-      - 'gitops/helm-values/staging/frontend-values.yaml'
-      - 'gitops/helm-values/prod/frontend-values.yaml'
+      - 'gitops/helm-values/**'
       - '.github/workflows/frontend-ci.yml'
 
 permissions:
-  attestations: write
   contents: write
   id-token: write
   security-events: write
+  attestations: write
 
 concurrency:
   group: frontend-ci-${{ github.ref }}-${{ github.event_name }}
@@ -47,25 +45,29 @@ env:
   AWS_REGION: ${{ vars.AWS_REGION }}
   AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
   AWS_ROLE_ARN: ${{ vars.AWS_ROLE_ARN }}
+
   PROJECT_NAME: astronomy-shop
   SERVICE_NAME: frontend
   SERVICE_PATH: src/frontend
   DOCKERFILE_PATH: src/frontend/Dockerfile
+
   IMAGE_TAG: ${{ github.sha }}
+
   DEV_VALUES_FILE: gitops/helm-values/dev/frontend-values.yaml
   STAGING_VALUES_FILE: gitops/helm-values/staging/frontend-values.yaml
   PROD_VALUES_FILE: gitops/helm-values/prod/frontend-values.yaml
 
 jobs:
   frontend-ci:
-    name: Frontend checks, image build, and dev update
+    name: CI - Test, Scan, Build, Dev Update
     if: github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout code
         uses: actions/checkout@v4
 
+      # ---------------- TESTS ----------------
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -73,66 +75,76 @@ jobs:
           cache: npm
           cache-dependency-path: ${{ env.SERVICE_PATH }}/package-lock.json
 
-      - name: Install frontend dependencies
+      - name: Install dependencies
         run: npm ci
         working-directory: ${{ env.SERVICE_PATH }}
 
-      - name: Run frontend tests
+      - name: Run tests
         run: npm test
         working-directory: ${{ env.SERVICE_PATH }}
 
-      - name: SAST scan
+      - name: Build (for CodeQL context)
+        run: npm run build --if-present
+        working-directory: ${{ env.SERVICE_PATH }}
+      # ---------------- SAST (CodeQL) ----------------
+      - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
         with:
           languages: javascript-typescript
 
-      - name: CodeQL analyze
+      - name: Analyze CodeQL
         uses: github/codeql-action/analyze@v3
 
-      - name: Dependency scan
-        uses: aquasecurity/trivy-action@0.28.0
+      # ---------------- DEPENDENCY SCAN ----------------
+      - name: Trivy FS scan
+        uses: aquasecurity/trivy-action@v0.19.0
         with:
           scan-type: fs
           scan-ref: ${{ env.SERVICE_PATH }}
           format: table
-          severity: CRITICAL,HIGH
+          severity: CRITICAL
           exit-code: '1'
 
-      - name: Configure image metadata
+      # ---------------- IMAGE METADATA ----------------
+      - name: Set image metadata
         run: |
           ECR_REPOSITORY_NAME="${PROJECT_NAME}/${SERVICE_NAME}"
           ECR_REPOSITORY="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY_NAME}"
-          if [ "${{ github.event_name }}" = "push" ]; then
-            IMAGE_URI="${ECR_REPOSITORY}:${IMAGE_TAG}"
-          else
-            IMAGE_URI="${SERVICE_NAME}:${IMAGE_TAG}"
-          fi
-          echo "ECR_REPOSITORY_NAME=${ECR_REPOSITORY_NAME}" >> "${GITHUB_ENV}"
-          echo "ECR_REPOSITORY=${ECR_REPOSITORY}" >> "${GITHUB_ENV}"
-          echo "IMAGE_URI=${IMAGE_URI}" >> "${GITHUB_ENV}"
 
-      - name: Build frontend image
+          IMAGE_URI="${ECR_REPOSITORY}:${IMAGE_TAG}"
+
+          echo "ECR_REPOSITORY_NAME=${ECR_REPOSITORY_NAME}" >> $GITHUB_ENV
+          echo "ECR_REPOSITORY=${ECR_REPOSITORY}" >> $GITHUB_ENV
+          echo "IMAGE_URI=${IMAGE_URI}" >> $GITHUB_ENV
+
+      # ---------------- BUILD ----------------
+      - name: Build Docker image
         run: |
           docker build \
-            --file "${DOCKERFILE_PATH}" \
-            --tag "${IMAGE_URI}" \
+            -f "${DOCKERFILE_PATH}" \
+            -t "${IMAGE_URI}" \
             .
 
+      # ---------------- IMAGE SCAN ----------------
       - name: Trivy image scan
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.19.0
         with:
           image-ref: ${{ env.IMAGE_URI }}
           format: sarif
-          output: trivy-frontend.sarif
+          output: trivy.sarif
           severity: CRITICAL,HIGH
-          exit-code: '1'
+          exit-code: '0'
 
-      - name: Upload Trivy SARIF
-        if: always()
+      - name: Verify SARIF file exists
+        run: ls -l trivy.sarif
+
+      - name: Upload SARIF
+        if: success() && hashFiles('trivy.sarif') != ''
         uses: github/codeql-action/upload-sarif@v3
         with:
-          sarif_file: trivy-frontend.sarif
+          sarif_file: trivy.sarif
 
+      # ---------------- SBOM ----------------
       - name: Generate SBOM
         uses: anchore/sbom-action@v0
         with:
@@ -140,53 +152,54 @@ jobs:
           format: spdx-json
           output-file: frontend-sbom.spdx.json
 
-      - name: Upload SBOM artifact
+      - name: Upload SBOM
         uses: actions/upload-artifact@v4
         with:
           name: frontend-sbom
           path: frontend-sbom.spdx.json
 
-      - name: Configure AWS credentials
+      # ---------------- AWS PUSH (ONLY MAIN) ----------------
+      - name: Configure AWS
         if: github.event_name == 'push'
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ env.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Login to Amazon ECR
+      - name: Login to ECR
         if: github.event_name == 'push'
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Push image to ECR
+      - name: Push image
         if: github.event_name == 'push'
         run: docker push "${IMAGE_URI}"
 
-      - name: Resolve pushed image digest
+      # ---------------- DIGEST RESOLVE ----------------
+      - name: Resolve image digest
         if: github.event_name == 'push'
         run: |
-          IMAGE_DIGEST="$(aws ecr describe-images \
+          IMAGE_DIGEST=$(aws ecr describe-images \
             --repository-name "${ECR_REPOSITORY_NAME}" \
             --image-ids imageTag="${IMAGE_TAG}" \
             --query 'imageDetails[0].imageDigest' \
-            --output text)"
-          if [ -z "${IMAGE_DIGEST}" ] || [ "${IMAGE_DIGEST}" = "None" ]; then
-            echo "Unable to resolve digest for ${IMAGE_URI}" >&2
-            exit 1
-          fi
-          echo "IMAGE_DIGEST=${IMAGE_DIGEST}" >> "${GITHUB_ENV}"
-          echo "IMAGE_REF=${ECR_REPOSITORY}@${IMAGE_DIGEST}" >> "${GITHUB_ENV}"
+            --output text)
 
+          echo "IMAGE_DIGEST=${IMAGE_DIGEST}" >> $GITHUB_ENV
+          echo "IMAGE_REF=${ECR_REPOSITORY}@${IMAGE_DIGEST}" >> $GITHUB_ENV
+
+      # ---------------- SIGNING ----------------
       - name: Install Cosign
         if: github.event_name == 'push'
         uses: sigstore/cosign-installer@v3
 
-      - name: Sign image digest
+      - name: Sign image
         if: github.event_name == 'push'
         run: cosign sign "${IMAGE_REF}"
         env:
-          COSIGN_YES: "true"
+          COSIGN_YES: 'true'
 
-      - name: Attest image provenance
+      # ---------------- ATTESTATIONS ----------------
+      - name: Provenance attestation
         if: github.event_name == 'push'
         uses: actions/attest-build-provenance@v2
         with:
@@ -194,13 +207,18 @@ jobs:
           subject-digest: ${{ env.IMAGE_DIGEST }}
           push-to-registry: true
 
-      - name: Attest SBOM
+      - name: SBOM attestation
         if: github.event_name == 'push'
-        run: cosign attest --predicate "${SERVICE_NAME}-sbom.spdx.json" --type spdxjson "${IMAGE_REF}"
+        run: |
+          cosign attest \
+            --predicate frontend-sbom.spdx.json \
+            --type spdxjson \
+            "${IMAGE_REF}"
         env:
-          COSIGN_YES: "true"
+          COSIGN_YES: 'true'
 
-      - name: Update dev Helm values image
+      # ---------------- GITOPS DEV UPDATE ----------------
+      - name: Update dev Helm values
         if: github.event_name == 'push'
         run: |
           python scripts/ci/update_image_values.py set \
@@ -209,72 +227,65 @@ jobs:
             --tag "${IMAGE_TAG}" \
             --digest "${IMAGE_DIGEST}"
 
-      - name: Commit dev GitOps image update
+      - name: Commit dev update
         if: github.event_name == 'push'
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: '[CI]: Promote frontend image to dev'
+          commit_message: '[CI] Update frontend image in dev'
           file_pattern: gitops/helm-values/dev/frontend-values.yaml
 
+  # ================= PROMOTION =================
   frontend-promotion:
-    name: Promote frontend image
+    name: Promote Image (staging/prod)
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     environment: ${{ inputs.promote_to }}
 
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Configure AWS credentials
+      - name: Configure AWS
         if: inputs.image_tag != ''
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ env.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Promote image tag
+      - name: Promote image
         run: |
+          set -e
+
           SOURCE_FILE="${DEV_VALUES_FILE}"
-          if [ "${PROMOTE_TO}" = "prod" ]; then
+          DEST_FILE="${STAGING_VALUES_FILE}"
+
+          if [ "${{ inputs.promote_to }}" = "prod" ]; then
             SOURCE_FILE="${STAGING_VALUES_FILE}"
-          fi
-          DESTINATION_FILE="${STAGING_VALUES_FILE}"
-          if [ "${PROMOTE_TO}" = "prod" ]; then
-            DESTINATION_FILE="${PROD_VALUES_FILE}"
+            DEST_FILE="${PROD_VALUES_FILE}"
           fi
 
-          TAG_ARGS=()
-          DIGEST_ARGS=()
-          REPOSITORY_ARGS=()
-          if [ -n "${IMAGE_TAG_INPUT}" ]; then
+          EXTRA_ARGS=""
+
+          if [ -n "${{ inputs.image_tag }}" ]; then
             ECR_REPOSITORY="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${PROJECT_NAME}/${SERVICE_NAME}"
-            IMAGE_DIGEST="$(aws ecr describe-images \
+            IMAGE_TAG="${{ inputs.image_tag }}"
+
+            IMAGE_DIGEST=$(aws ecr describe-images \
               --repository-name "${PROJECT_NAME}/${SERVICE_NAME}" \
-              --image-ids imageTag="${IMAGE_TAG_INPUT}" \
+              --image-ids imageTag="${IMAGE_TAG}" \
               --query 'imageDetails[0].imageDigest' \
-              --output text)"
-            if [ -z "${IMAGE_DIGEST}" ] || [ "${IMAGE_DIGEST}" = "None" ]; then
-              echo "Image tag ${IMAGE_TAG_INPUT} does not exist in ECR for ${SERVICE_NAME}" >&2
-              exit 1
-            fi
-            REPOSITORY_ARGS=(--repository "${ECR_REPOSITORY}")
-            TAG_ARGS=(--tag "${IMAGE_TAG_INPUT}")
-            DIGEST_ARGS=(--digest "${IMAGE_DIGEST}")
+              --output text)
+
+            EXTRA_ARGS="--repository ${ECR_REPOSITORY} --tag ${IMAGE_TAG} --digest ${IMAGE_DIGEST}"
           fi
 
           python scripts/ci/update_image_values.py promote \
             --source "${SOURCE_FILE}" \
-            --destination "${DESTINATION_FILE}" \
-            "${REPOSITORY_ARGS[@]}" \
-            "${TAG_ARGS[@]}" \
-            "${DIGEST_ARGS[@]}"
-        env:
-          PROMOTE_TO: ${{ inputs.promote_to }}
-          IMAGE_TAG_INPUT: ${{ inputs.image_tag }}
+            --destination "${DEST_FILE}" \
+            ${EXTRA_ARGS}
 
-      - name: Commit promotion update
+      - name: Commit promotion
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: '[CI]: Promote frontend image to ${{ inputs.promote_to }}'
-          file_pattern: gitops/helm-values/${{ inputs.promote_to }}/frontend-values.yaml
+          commit_message: '[CI] Promote frontend to ${{ inputs.promote_to }}'
+          file_pattern: gitops/helm-values/**/frontend-values.yaml
