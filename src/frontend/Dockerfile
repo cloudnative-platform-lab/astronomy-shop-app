@@ -7,29 +7,31 @@ COPY ./src/frontend/package*.json ./
 RUN npm ci
 
 
-# ===================== PROTOC + BUILD =====================
+# ===================== BUILDER =====================
 FROM node:20-alpine AS builder
 
 RUN apk add --no-cache curl unzip libc6-compat
 
 WORKDIR /app
 
-# install protoc
+# install protoc (only if grpc:generate needs it)
 RUN curl -LO https://github.com/protocolbuffers/protobuf/releases/download/v25.3/protoc-25.3-linux-x86_64.zip && \
     unzip protoc-25.3-linux-x86_64.zip -d /usr/local
 
-ENV PATH="/usr/local/bin:/usr/local/include:$PATH"
+ENV PATH="/usr/local/bin:$PATH"
 
-# copy deps
+# copy dependencies
 COPY --from=deps /app/node_modules ./node_modules
 
-# copy source
+# copy source + proto files
 COPY ./pb ./pb
 COPY ./src/frontend ./src/frontend
 
 WORKDIR /app/src/frontend
 
-# build next standalone
+# ===================== IMPORTANT =====================
+# grpc generation is already inside "npm run build"
+# so we only call build
 RUN npm run build
 
 
@@ -41,12 +43,12 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=8080
 
-# copy only required artifacts
+# copy standalone output
 COPY --from=builder /app/src/frontend/.next/standalone ./
 COPY --from=builder /app/src/frontend/.next/static ./.next/static
 COPY --from=builder /app/src/frontend/public ./public
 
 EXPOSE 8080
 
-# distroless requires full path to node entry
+# distroless requires entry file
 CMD ["server.js"]

@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "npm run grpc:generate && NODE_OPTIONS='-r ./utils/telemetry/Instrumentation.js' next dev",
-    "build": "next build",
+    "build": "npm run grpc:generate && next build",
     "start": "node --require ./Instrumentation.js server.js",
     "lint": "next lint",
 
