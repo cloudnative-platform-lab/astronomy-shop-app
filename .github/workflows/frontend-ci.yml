@@ -67,12 +67,13 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # ================= FIXED PROTOC INSTALL (STABLE) =================
+      # ================= FIXED PROTOC INSTALL =================
       - name: Install protoc (stable)
         run: |
           curl -LO https://github.com/protocolbuffers/protobuf/releases/download/v25.3/protoc-25.3-linux-x86_64.zip
           unzip protoc-25.3-linux-x86_64.zip -d $HOME/protoc
           echo "$HOME/protoc/bin" >> $GITHUB_PATH
+          export PATH="$HOME/protoc/bin:$PATH"
           protoc --version
 
       # ---------------- NODE SETUP ----------------
@@ -88,7 +89,7 @@ jobs:
         run: npm ci
         working-directory: ${{ env.SERVICE_PATH }}
 
-      # ---------------- TEST ----------------
+      # ---------------- TESTS ----------------
       - name: Run tests
         run: npm test
         working-directory: ${{ env.SERVICE_PATH }}
@@ -240,7 +241,7 @@ jobs:
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: '[CI] Update frontend image in dev'
-          file_pattern: gitops/helm-values/dev/frontend-values.yaml
+          file_pattern: gitops/helm-vals/dev/frontend-values.yaml
 
   # ================= PROMOTION =================
   frontend-promotion:
@@ -296,4 +297,4 @@ jobs:
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: '[CI] Promote frontend to ${{ inputs.promote_to }}'
-          file_pattern: gitops/helm-values/**/frontend-values.yaml
+          file_pattern: gitops/helm-vals/**/frontend-values.yaml
