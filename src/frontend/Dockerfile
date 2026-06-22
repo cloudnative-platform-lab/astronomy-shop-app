@@ -14,24 +14,25 @@ RUN apk add --no-cache curl unzip libc6-compat
 
 WORKDIR /app
 
-# install protoc (only if grpc:generate needs it)
+# install protoc
 RUN curl -LO https://github.com/protocolbuffers/protobuf/releases/download/v25.3/protoc-25.3-linux-x86_64.zip && \
     unzip protoc-25.3-linux-x86_64.zip -d /usr/local
 
 ENV PATH="/usr/local/bin:$PATH"
 
-# copy dependencies
+# copy deps
 COPY --from=deps /app/node_modules ./node_modules
 
-# copy source + proto files
+# copy full repo context needed for grpc
 COPY ./pb ./pb
 COPY ./src/frontend ./src/frontend
 
 WORKDIR /app/src/frontend
 
-# ===================== IMPORTANT =====================
-# grpc generation is already inside "npm run build"
-# so we only call build
+# run grpc generation (now pb is reachable via ../../pb)
+RUN npm run grpc:generate
+
+# build next.js
 RUN npm run build
 
 
@@ -43,12 +44,10 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=8080
 
-# copy standalone output
 COPY --from=builder /app/src/frontend/.next/standalone ./
 COPY --from=builder /app/src/frontend/.next/static ./.next/static
 COPY --from=builder /app/src/frontend/public ./public
 
 EXPOSE 8080
 
-# distroless requires entry file
 CMD ["server.js"]
