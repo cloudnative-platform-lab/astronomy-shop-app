@@ -1,4 +1,4 @@
-# Copyright The OpenTelemetry Authors
+# Copyright The OpenTelemetry Authorss
 # SPDX-License-Identifier: Apache-2.0
 
 FROM node:20-alpine AS deps
