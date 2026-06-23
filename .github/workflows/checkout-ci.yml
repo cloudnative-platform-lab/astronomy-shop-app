@@ -1,0 +1,288 @@
+name: Checkout CI/CD
+
+on:
+  workflow_dispatch:
+    inputs:
+      promote_to:
+        description: Environment to promote the existing checkout image to
+        required: true
+        type: choice
+        options:
+          - staging
+          - prod
+      image_tag:
+        description: Existing image tag to promote. Leave empty to promote from previous environment.
+        required: false
+        type: string
+
+  pull_request:
+    paths:
+      - 'src/checkout/**'
+      - 'gitops/charts/astronomy-shop-service/**'
+      - 'gitops/helm-values/**'
+      - '.github/workflows/checkout-ci.yml'
+
+  push:
+    branches:
+      - main
+    paths:
+      - 'src/checkout/**'
+      - 'gitops/charts/astronomy-shop-service/**'
+      - 'gitops/helm-values/**'
+      - '.github/workflows/checkout-ci.yml'
+
+permissions:
+  contents: write
+  id-token: write
+  security-events: write
+  attestations: write
+
+concurrency:
+  group: checkout-ci-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: true
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION }}
+  AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
+  AWS_ROLE_ARN: ${{ vars.AWS_ROLE_ARN }}
+
+  PROJECT_NAME: astronomy-shop
+  SERVICE_NAME: checkout
+  SERVICE_PATH: src/checkout
+  DOCKERFILE_PATH: src/checkout/Dockerfile
+
+  IMAGE_TAG: ${{ github.sha }}
+
+  DEV_VALUES_FILE: gitops/helm-values/dev/checkout-values.yaml
+  STAGING_VALUES_FILE: gitops/helm-values/staging/checkout-values.yaml
+  PROD_VALUES_FILE: gitops/helm-values/prod/checkout-values.yaml
+
+jobs:
+  checkout-ci:
+    name: CI - Test, Scan, Build, Dev Update
+    if: github.event_name != 'workflow_dispatch'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # ---------------- TESTS ----------------
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: src/checkout/go.mod
+          cache: true
+
+      - name: Run tests
+        run: |
+          cd "${SERVICE_PATH}"
+          go test ./...
+
+      - name: Build (for CodeQL context)
+        run: |
+          cd "${SERVICE_PATH}"
+          go build ./...
+      # ---------------- SAST (CodeQL) ----------------
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: go
+
+      - name: Analyze CodeQL
+        uses: github/codeql-action/analyze@v3
+
+      # ---------------- DEPENDENCY SCAN ----------------
+      - name: Trivy FS scan
+        uses: aquasecurity/trivy-action@v0.19.0
+        with:
+          scan-type: fs
+          scan-ref: ${{ env.SERVICE_PATH }}
+          format: table
+          severity: CRITICAL
+          exit-code: '1'
+
+      # ---------------- IMAGE METADATA ----------------
+      - name: Set image metadata
+        run: |
+          ECR_REPOSITORY_NAME="${PROJECT_NAME}/${SERVICE_NAME}"
+          ECR_REPOSITORY="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY_NAME}"
+
+          IMAGE_URI="${ECR_REPOSITORY}:${IMAGE_TAG}"
+
+          echo "ECR_REPOSITORY_NAME=${ECR_REPOSITORY_NAME}" >> $GITHUB_ENV
+          echo "ECR_REPOSITORY=${ECR_REPOSITORY}" >> $GITHUB_ENV
+          echo "IMAGE_URI=${IMAGE_URI}" >> $GITHUB_ENV
+
+      # ---------------- BUILD ----------------
+      - name: Build Docker image
+        run: |
+          docker build \
+            -f "${DOCKERFILE_PATH}" \
+            -t "${IMAGE_URI}" \
+            src/checkout
+
+      # ---------------- IMAGE SCAN ----------------
+      - name: Trivy image scan
+        uses: aquasecurity/trivy-action@v0.19.0
+        with:
+          image-ref: ${{ env.IMAGE_URI }}
+          format: sarif
+          output: trivy.sarif
+          severity: CRITICAL,HIGH
+          exit-code: '0'
+
+      - name: Verify SARIF file exists
+        run: ls -l trivy.sarif
+
+      - name: Upload SARIF
+        if: success() && hashFiles('trivy.sarif') != ''
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy.sarif
+
+      # ---------------- SBOM ----------------
+      - name: Generate SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          image: ${{ env.IMAGE_URI }}
+          format: spdx-json
+          output-file: checkout-sbom.spdx.json
+
+      - name: Upload SBOM
+        uses: actions/upload-artifact@v4
+        with:
+          name: checkout-sbom
+          path: checkout-sbom.spdx.json
+
+      # ---------------- AWS PUSH (ONLY MAIN) ----------------
+      - name: Configure AWS
+        if: github.event_name == 'push'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to ECR
+        if: github.event_name == 'push'
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Push image
+        if: github.event_name == 'push'
+        run: docker push "${IMAGE_URI}"
+
+      # ---------------- DIGEST RESOLVE ----------------
+      - name: Resolve image digest
+        if: github.event_name == 'push'
+        run: |
+          IMAGE_DIGEST=$(aws ecr describe-images \
+            --repository-name "${ECR_REPOSITORY_NAME}" \
+            --image-ids imageTag="${IMAGE_TAG}" \
+            --query 'imageDetails[0].imageDigest' \
+            --output text)
+
+          echo "IMAGE_DIGEST=${IMAGE_DIGEST}" >> $GITHUB_ENV
+          echo "IMAGE_REF=${ECR_REPOSITORY}@${IMAGE_DIGEST}" >> $GITHUB_ENV
+
+      # ---------------- SIGNING ----------------
+      - name: Install Cosign
+        if: github.event_name == 'push'
+        uses: sigstore/cosign-installer@v3
+
+      - name: Sign image
+        if: github.event_name == 'push'
+        run: cosign sign "${IMAGE_REF}"
+        env:
+          COSIGN_YES: 'true'
+
+      # ---------------- ATTESTATIONS ----------------
+      - name: Provenance attestation
+        if: github.event_name == 'push'
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-name: ${{ env.ECR_REPOSITORY }}
+          subject-digest: ${{ env.IMAGE_DIGEST }}
+          push-to-registry: true
+
+      - name: SBOM attestation
+        if: github.event_name == 'push'
+        run: |
+          cosign attest \
+            --predicate checkout-sbom.spdx.json \
+            --type spdxjson \
+            "${IMAGE_REF}"
+        env:
+          COSIGN_YES: 'true'
+
+      # ---------------- GITOPS DEV UPDATE ----------------
+      - name: Update dev Helm values
+        if: github.event_name == 'push'
+        run: |
+          python scripts/ci/update_image_values.py set \
+            --file "${DEV_VALUES_FILE}" \
+            --repository "${ECR_REPOSITORY}" \
+            --tag "${IMAGE_TAG}" \
+            --digest "${IMAGE_DIGEST}"
+
+      - name: Commit dev update
+        if: github.event_name == 'push'
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: '[CI] Update checkout image in dev'
+          file_pattern: gitops/helm-values/dev/checkout-values.yaml
+
+  # ================= PROMOTION =================
+  checkout-promotion:
+    name: Promote Image (staging/prod)
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.promote_to }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS
+        if: inputs.image_tag != ''
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Promote image
+        run: |
+          set -e
+
+          SOURCE_FILE="${DEV_VALUES_FILE}"
+          DEST_FILE="${STAGING_VALUES_FILE}"
+
+          if [ "${{ inputs.promote_to }}" = "prod" ]; then
+            SOURCE_FILE="${STAGING_VALUES_FILE}"
+            DEST_FILE="${PROD_VALUES_FILE}"
+          fi
+
+          EXTRA_ARGS=""
+
+          if [ -n "${{ inputs.image_tag }}" ]; then
+            ECR_REPOSITORY="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${PROJECT_NAME}/${SERVICE_NAME}"
+            IMAGE_TAG="${{ inputs.image_tag }}"
+
+            IMAGE_DIGEST=$(aws ecr describe-images \
+              --repository-name "${PROJECT_NAME}/${SERVICE_NAME}" \
+              --image-ids imageTag="${IMAGE_TAG}" \
+              --query 'imageDetails[0].imageDigest' \
+              --output text)
+
+            EXTRA_ARGS="--repository ${ECR_REPOSITORY} --tag ${IMAGE_TAG} --digest ${IMAGE_DIGEST}"
+          fi
+
+          python scripts/ci/update_image_values.py promote \
+            --source "${SOURCE_FILE}" \
+            --destination "${DEST_FILE}" \
+            ${EXTRA_ARGS}
+
+      - name: Commit promotion
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: '[CI] Promote checkout to ${{ inputs.promote_to }}'
+          file_pattern: gitops/helm-values/**/checkout-values.yaml
