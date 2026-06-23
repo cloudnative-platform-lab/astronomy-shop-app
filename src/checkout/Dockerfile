@@ -1,26 +1,34 @@
-# Copyright The OpenTelemetry Authors
-# SPDX-License-Identifier: Apache-2.0
-
-
+# =========================
+# 1. Builder Stage
+# =========================
 FROM golang:1.22-alpine AS builder
 
-WORKDIR /usr/src/app/
+WORKDIR /app
 
-RUN --mount=type=cache,target=/go/pkg/mod/ \
-    --mount=type=bind,source=./src/checkout/go.sum,target=go.sum \
-    --mount=type=bind,source=./src/checkout/go.mod,target=go.mod \
-    go mod download
+# copy go mod files first (better caching)
+COPY go.mod go.sum ./
 
-RUN --mount=type=cache,target=/go/pkg/mod/ \
-    --mount=type=cache,target=/root/.cache/go-build \
-    --mount=type=bind,rw,source=./src/checkout,target=. \
-    go build -ldflags "-s -w" -o /go/bin/checkout/ ./
+RUN go mod download
 
-FROM alpine
+# copy source code
+COPY . .
 
-WORKDIR /usr/src/app/
+# build binary
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+    go build -ldflags "-s -w" -o checkout .
 
-COPY --from=builder /go/bin/checkout/ ./
+# =========================
+# 2. Distroless Runtime Stage
+# =========================
+FROM gcr.io/distroless/static:nonroot
 
-EXPOSE ${CHECKOUT_PORT}
-ENTRYPOINT [ "./checkout" ]
+WORKDIR /app
+
+# copy binary from builders
+COPY --from=builder /app/checkout /app/checkout
+
+EXPOSE 8080
+
+USER nonroot:nonroot
+
+ENTRYPOINT ["/app/checkout"]
