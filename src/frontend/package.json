@@ -7,6 +7,7 @@
     "dev": "npm run grpc:generate && NODE_OPTIONS='-r ./utils/telemetry/Instrumentation.js' next dev",
     "build": "npm run grpc:generate && next build",
     "start": "node --require ./Instrumentation.js server.js",
+    "test": "echo \"No tests yet\" && exit 0",
     "lint": "next lint",
     "cy:open": "cypress open",
     "grpc:generate": "mkdir -p ./protos && protoc -I ./pb  --plugin=./node_modules/.bin/protoc-gen-ts_proto --ts_proto_opt=esModuleInterop=true --ts_proto_out=./protos --ts_proto_opt=outputServices=grpc-js demo.proto"
