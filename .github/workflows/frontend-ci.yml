@@ -110,7 +110,7 @@ jobs:
 
       # ================= BUILD =================
       - name: Build
-        run: npm run build --if-present
+        run: npm run grpc:generate && npm run build
         working-directory: src/frontend
 
       # ================= IMAGE METADATA =================
