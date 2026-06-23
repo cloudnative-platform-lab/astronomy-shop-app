@@ -80,25 +80,20 @@ jobs:
       - name: Run tests
         run: |
           cd "${SERVICE_PATH}"
-          if [ -x "./gradlew" ]; then
-            ./gradlew test
-          elif [ -f "pom.xml" ]; then
-            mvn test
-          else
-            echo "No Gradle or Maven project found; skipping tests."
-          fi
+          chmod +x ./gradlew
+          ./gradlew test --no-daemon --stacktrace
 
-      # ---------------- BUILD ----------------
+      # ---------------- FORMAT CHECK (non-blocking) ----------------
+      - name: Verify formatting (non-blocking)
+        run: |
+          cd "${SERVICE_PATH}"
+          ./gradlew verifyGoogleJavaFormat --no-daemon || true
+
+      # ---------------- BUILD (FIXED) ----------------
       - name: Build application
         run: |
           cd "${SERVICE_PATH}"
-          if [ -x "./gradlew" ]; then
-            ./gradlew build -x test
-          elif [ -f "pom.xml" ]; then
-            mvn -DskipTests package
-          else
-            echo "No Gradle or Maven project found; skipping build."
-          fi
+          ./gradlew clean build -x test -x verifyGoogleJavaFormat --no-daemon --stacktrace
 
       # ---------------- CODEQL ----------------
       - name: Initialize CodeQL
