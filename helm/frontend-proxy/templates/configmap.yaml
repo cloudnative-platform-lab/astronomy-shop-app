@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: frontend-proxy-config
+  labels:
+    app.kubernetes.io/name: frontend-proxy
+    app.kubernetes.io/part-of: astronomy-shop
+data:
+  ENVIRONMENT: dev
+  FRONTEND_SERVICE_ADDR: frontend:8080
+  CART_SERVICE_ADDR: cart:8080
+  CHECKOUT_SERVICE_ADDR: checkout:8080
+  PRODUCT_CATALOG_SERVICE_ADDR: product-catalog:8080
+  PAYMENT_SERVICE_ADDR: payment:8080
+  RECOMMENDATION_SERVICE_ADDR: recommendation:8080
