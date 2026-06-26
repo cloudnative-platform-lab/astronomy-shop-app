@@ -55,9 +55,9 @@ env:
 
   IMAGE_TAG: ${{ github.sha }}
 
-  DEV_VALUES_FILE: gitops/helm-values/dev/frontend-values.yaml
-  STAGING_VALUES_FILE: gitops/helm-values/staging/frontend-values.yaml
-  PROD_VALUES_FILE: gitops/helm-values/prod/frontend-values.yaml
+  DEV_VALUES_FILE: helm/frontend/values.yaml
+  STAGING_VALUES_FILE: helm/frontend/values.yaml
+  PROD_VALUES_FILE: helm/frontend/values.yaml
 
 
 jobs:
@@ -242,7 +242,7 @@ jobs:
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: '[CI] Update frontend image in dev'
-          file_pattern: gitops/helm-values/dev/frontend-values.yaml
+          file_pattern: helm/frontend/values.yaml
 
 
   # ================= PROMOTION =================
