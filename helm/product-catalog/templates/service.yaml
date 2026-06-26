@@ -1,15 +1,15 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "product-catalog.fullname" . }}
+  name: product-catalog
   labels:
-    {{- include "product-catalog.labels" . | nindent 4 }}
+    app.kubernetes.io/name: product-catalog
+    app.kubernetes.io/part-of: astronomy-shop
 spec:
-  type: {{ .Values.service.type }}
-  ports:
-    - port: {{ .Values.service.port }}
-      targetPort: http
-      protocol: TCP
-      name: http
+  type: ClusterIP
   selector:
-    {{- include "product-catalog.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/name: product-catalog
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
