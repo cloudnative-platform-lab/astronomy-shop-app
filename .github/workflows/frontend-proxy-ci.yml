@@ -1,10 +1,10 @@
-name: Ad CI/CD
+name: Frontend Proxy CI/CD
 
 on:
   workflow_dispatch:
     inputs:
       promote_to:
-        description: Environment to promote the existing ad image to
+        description: Environment to promote the existing frontend-proxy image to
         required: true
         type: choice
         options:
@@ -17,19 +17,19 @@ on:
 
   pull_request:
     paths:
-      - 'src/ad/**'
+      - 'src/frontend/**'
       - 'gitops/charts/astronomy-shop-service/**'
       - 'gitops/helm-values/**'
-      - '.github/workflows/ad-ci.yml'
+      - '.github/workflows/frontend-proxy-ci.yml'
 
   push:
     branches:
       - main
     paths:
-      - 'src/ad/**'
+      - 'src/frontend/**'
       - 'gitops/charts/astronomy-shop-service/**'
       - 'gitops/helm-values/**'
-      - '.github/workflows/ad-ci.yml'
+      - '.github/workflows/frontend-proxy-ci.yml'
 
 permissions:
   contents: write
@@ -38,7 +38,7 @@ permissions:
   attestations: write
 
 concurrency:
-  group: ad-ci-${{ github.ref }}-${{ github.event_name }}
+  group: frontend-proxy-ci-${{ github.ref }}-${{ github.event_name }}
   cancel-in-progress: true
 
 env:
@@ -47,19 +47,18 @@ env:
   AWS_ROLE_ARN: ${{ vars.AWS_ROLE_ARN }}
 
   PROJECT_NAME: astronomy-shop
-  SERVICE_NAME: ad
-  SERVICE_PATH: src/ad
-  DOCKERFILE_PATH: src/ad/Dockerfile
+  SERVICE_NAME: frontend-proxy
+  SERVICE_PATH: src/frontend-proxy
+  DOCKERFILE_PATH: src/frontend-proxy/Dockerfile
 
   IMAGE_TAG: ${{ github.sha }}
 
-  DEV_VALUES_FILE: gitops/helm-values/dev/ad-values.yaml
-  STAGING_VALUES_FILE: gitops/helm-values/staging/ad-values.yaml
-  PROD_VALUES_FILE: gitops/helm-values/prod/ad-values.yaml
-
+  DEV_VALUES_FILE: gitops/helm-values/dev/frontend-proxy-values.yaml
+  STAGING_VALUES_FILE: gitops/helm-values/staging/frontend-proxy-values.yaml
+  PROD_VALUES_FILE: gitops/helm-values/prod/frontend-proxy-values.yaml
 
 jobs:
-  ad-ci:
+  frontend-proxy-ci:
     name: CI - Test, Scan, Build, Dev Update
     if: github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-latest
@@ -68,44 +67,36 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # ---------------- JAVA SETUP ----------------
-      - name: Setup Java
-        uses: actions/setup-java@v4
+      # ---------------- TESTS ----------------
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          distribution: temurin
-          java-version: '21'
-          cache: gradle
+          node-version: 20
+          cache: npm
+          cache-dependency-path: ${{ env.SERVICE_PATH }}/package-lock.json
 
-      # ---------------- TEST ----------------
+      - name: Install dependencies
+        run: npm ci
+        working-directory: ${{ env.SERVICE_PATH }}
+
       - name: Run tests
-        run: |
-          cd "${SERVICE_PATH}"
-          chmod +x ./gradlew
-          ./gradlew test --no-daemon --stacktrace
+        run: npm test
+        working-directory: ${{ env.SERVICE_PATH }}
 
-      # ---------------- FORMAT CHECK (non-blocking) ----------------
-      - name: Verify formatting (non-blocking)
-        run: |
-          cd "${SERVICE_PATH}"
-          ./gradlew verifyGoogleJavaFormat --no-daemon || true
-
-      # ---------------- BUILD (FIXED) ----------------
-      - name: Build application
-        run: |
-          cd "${SERVICE_PATH}"
-          ./gradlew clean build -x test -x verifyGoogleJavaFormat --no-daemon --stacktrace
-
-      # ---------------- CODEQL ----------------
+      - name: Build (for CodeQL context)
+        run: npm run build --if-present
+        working-directory: ${{ env.SERVICE_PATH }}
+      # ---------------- SAST (CodeQL) ----------------
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
         with:
-          languages: java
+          languages: javascript-typescript
 
       - name: Analyze CodeQL
         uses: github/codeql-action/analyze@v3
 
-      # ---------------- TRIVY FS SCAN ----------------
-      - name: Trivy filesystem scan
+      # ---------------- DEPENDENCY SCAN ----------------
+      - name: Trivy FS scan
         uses: aquasecurity/trivy-action@v0.19.0
         with:
           scan-type: fs
@@ -119,13 +110,14 @@ jobs:
         run: |
           ECR_REPOSITORY_NAME="${PROJECT_NAME}/${SERVICE_NAME}"
           ECR_REPOSITORY="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY_NAME}"
+
           IMAGE_URI="${ECR_REPOSITORY}:${IMAGE_TAG}"
 
           echo "ECR_REPOSITORY_NAME=${ECR_REPOSITORY_NAME}" >> $GITHUB_ENV
           echo "ECR_REPOSITORY=${ECR_REPOSITORY}" >> $GITHUB_ENV
           echo "IMAGE_URI=${IMAGE_URI}" >> $GITHUB_ENV
 
-      # ---------------- DOCKER BUILD ----------------
+      # ---------------- BUILD ----------------
       - name: Build Docker image
         run: |
           docker build \
@@ -143,6 +135,9 @@ jobs:
           severity: CRITICAL,HIGH
           exit-code: '0'
 
+      - name: Verify SARIF file exists
+        run: ls -l trivy.sarif
+
       - name: Upload SARIF
         if: success() && hashFiles('trivy.sarif') != ''
         uses: github/codeql-action/upload-sarif@v3
@@ -155,13 +150,13 @@ jobs:
         with:
           image: ${{ env.IMAGE_URI }}
           format: spdx-json
-          output-file: ad-sbom.spdx.json
+          output-file: frontend-proxy-sbom.spdx.json
 
       - name: Upload SBOM
         uses: actions/upload-artifact@v4
         with:
-          name: ad-sbom
-          path: ad-sbom.spdx.json
+          name: frontend-proxy-sbom
+          path: frontend-proxy-sbom.spdx.json
 
       # ---------------- AWS PUSH (ONLY MAIN) ----------------
       - name: Configure AWS
@@ -216,13 +211,13 @@ jobs:
         if: github.event_name == 'push'
         run: |
           cosign attest \
-            --predicate ad-sbom.spdx.json \
+            --predicate frontend-proxy-sbom.spdx.json \
             --type spdxjson \
             "${IMAGE_REF}"
         env:
           COSIGN_YES: 'true'
 
-      # ---------------- GITOPS UPDATE ----------------
+      # ---------------- GITOPS DEV UPDATE ----------------
       - name: Update dev Helm values
         if: github.event_name == 'push'
         run: |
@@ -236,12 +231,11 @@ jobs:
         if: github.event_name == 'push'
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: '[CI] Update ad image in dev'
-          file_pattern: gitops/helm-values/dev/ad-values.yaml
-
+          commit_message: '[CI] Update frontend-proxy image in dev'
+          file_pattern: gitops/helm-values/dev/frontend-proxy-values.yaml
 
   # ================= PROMOTION =================
-  ad-promotion:
+  frontend-proxy-promotion:
     name: Promote Image (staging/prod)
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
@@ -293,5 +287,5 @@ jobs:
       - name: Commit promotion
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: '[CI] Promote ad to ${{ inputs.promote_to }}'
-          file_pattern: gitops/helm-values/**/ad-values.yaml
+          commit_message: '[CI] Promote frontend-proxy to ${{ inputs.promote_to }}'
+          file_pattern: gitops/helm-values/**/frontend-proxy-values.yaml

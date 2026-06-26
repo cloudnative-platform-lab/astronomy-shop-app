@@ -1,8 +1,10 @@
 apiVersion: v1
-kind: ServiceAccount
+kind: ConfigMap
 metadata:
-  name: recommendation
+  name: recommendation-config
   labels:
     app.kubernetes.io/name: recommendation
     app.kubernetes.io/part-of: astronomy-shop
-automountServiceAccountToken: false
+data:
+  ENVIRONMENT: dev
+  PRODUCT_CATALOG_SERVICE_ADDR: product-catalog:8080
