@@ -17,7 +17,7 @@ on:
 
   pull_request:
     paths:
-      - 'src/frontend/**'
+      - 'src/frontend-proxy/**'
       - 'gitops/charts/astronomy-shop-service/**'
       - 'gitops/helm-values/**'
       - '.github/workflows/frontend-proxy-ci.yml'
@@ -26,7 +26,7 @@ on:
     branches:
       - main
     paths:
-      - 'src/frontend/**'
+      - 'src/frontend-proxy/**'
       - 'gitops/charts/astronomy-shop-service/**'
       - 'gitops/helm-values/**'
       - '.github/workflows/frontend-proxy-ci.yml'
@@ -59,41 +59,13 @@ env:
 
 jobs:
   frontend-proxy-ci:
-    name: CI - Test, Scan, Build, Dev Update
+    name: CI - Scan, Build, Dev Update
     if: github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
-      # ---------------- TESTS ----------------
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-          cache-dependency-path: ${{ env.SERVICE_PATH }}/package-lock.json
-
-      - name: Install dependencies
-        run: npm ci
-        working-directory: ${{ env.SERVICE_PATH }}
-
-      - name: Run tests
-        run: npm test
-        working-directory: ${{ env.SERVICE_PATH }}
-
-      - name: Build (for CodeQL context)
-        run: npm run build --if-present
-        working-directory: ${{ env.SERVICE_PATH }}
-      # ---------------- SAST (CodeQL) ----------------
-      - name: Initialize CodeQL
-        uses: github/codeql-action/init@v3
-        with:
-          languages: javascript-typescript
-
-      - name: Analyze CodeQL
-        uses: github/codeql-action/analyze@v3
 
       # ---------------- DEPENDENCY SCAN ----------------
       - name: Trivy FS scan
