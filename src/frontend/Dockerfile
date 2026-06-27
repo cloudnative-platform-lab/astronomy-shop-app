@@ -17,6 +17,8 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY ./pb ./pb
 COPY ./src/frontend .
 
+ENV PB_PATH=/app/pb
+
 RUN npm run grpc:generate
 RUN npm run build
 
