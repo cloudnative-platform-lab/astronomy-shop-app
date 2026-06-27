@@ -6,7 +6,7 @@ FROM node:20-alpine AS base
 WORKDIR /app
 
 # install system deps
-RUN apk add --no-cache libc6-compat python3 make g++
+RUN apk add --no-cache libc6-compat python3 make g++ protobuf protobuf-dev
 
 # =========================
 # 2. Dependencies stage
@@ -15,14 +15,14 @@ FROM base AS deps
 
 WORKDIR /app
 
-# copy only package files first (better caching)
+# copy only package files first (better cache)
 COPY ./src/frontend/package*.json ./
 
-# 🚨 CRITICAL: disable Cypress download during build
+# 🚨 disable Cypress download
 ENV CYPRESS_INSTALL_BINARY=0
 ENV npm_config_loglevel=verbose
 
-# stabilize npm for bad networks
+# npm stability for CI/network issues
 RUN npm config set registry https://registry.npmjs.org/ && \
     npm config set fetch-retries 10 && \
     npm config set fetch-retry-mintimeout 20000 && \
@@ -31,7 +31,6 @@ RUN npm config set registry https://registry.npmjs.org/ && \
     npm config set maxsockets 1 && \
     npm config set strict-ssl true
 
-# install dependencies
 RUN npm ci --no-audit --no-fund
 
 # =========================
@@ -41,8 +40,22 @@ FROM base AS builder
 
 WORKDIR /app
 
+# IMPORTANT: copy everything needed for build
+COPY ./src/frontend ./src/frontend
+COPY ./pb ./pb
+
+# bring dependencies
 COPY --from=deps /app/node_modules ./node_modules
-COPY ./src/frontend .
+
+WORKDIR /app/src/frontend
+
+# generate protobuf
+RUN mkdir -p ./protos && \
+    protoc -I /app/pb \
+    --ts_proto_out=./protos \
+    --ts_proto_opt=esModuleInterop=true \
+    --ts_proto_opt=outputServices=grpc-js \
+    /app/pb/demo.proto
 
 # build app
 RUN npm run build
@@ -56,12 +69,12 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 
-# create non-root user
 RUN addgroup -g 1001 -S nodejs && \
     adduser -S nextjs -u 1001
 
-# copy build output
-COPY --from=builder /app ./
+# copy only built output + deps
+COPY --from=builder /app/src/frontend ./
+COPY --from=builder /app/node_modules ./node_modules
 
 USER nextjs
 
