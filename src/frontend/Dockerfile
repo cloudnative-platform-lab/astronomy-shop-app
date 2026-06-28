@@ -15,7 +15,7 @@ FROM base AS deps
 
 WORKDIR /app
 
-# copy only package files first (better cache)
+# copy only package files first (better caches)
 COPY ./src/frontend/package*.json ./
 
 # 🚨 disable Cypress download
