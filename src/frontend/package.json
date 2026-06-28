@@ -11,7 +11,7 @@
     "grpc:generate": "mkdir -p ./protos && protoc -I ../../pb --ts_proto_out=./protos --ts_proto_opt=esModuleInterop=true --ts_proto_opt=outputServices=grpc-js ../../pb/demo.proto"
   },
   "dependencies": {
-    "@bufbuild/protobuf": "^1.10.1",
+    "@bufbuild/protobuf": "^1.7.2",
     "@grpc/grpc-js": "1.12.5",
     "@openfeature/flagd-provider": "0.13.2",
     "@openfeature/flagd-web-provider": "0.7.2",
