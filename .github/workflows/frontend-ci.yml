@@ -129,7 +129,7 @@ jobs:
           # FIX: make root pb accessible inside frontend scripts
           PB_PATH: ../../pb
 
-      # ================= IMAGE METADATA =================
+      # ================= IMAGE METADATA ================= #
       - name: Set image metadata
         run: |
           ECR_REPOSITORY_NAME="${PROJECT_NAME}/${SERVICE_NAME}"
