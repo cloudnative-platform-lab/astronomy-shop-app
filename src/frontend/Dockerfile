@@ -40,18 +40,22 @@ FROM base AS builder
 
 WORKDIR /app
 
-# IMPORTANT: copy everything needed for build
+# copy source + proto
 COPY ./src/frontend ./src/frontend
 COPY ./pb ./pb
 
-# bring dependencies
+# bring deps
 COPY --from=deps /app/node_modules ./node_modules
+
+# install ts-proto plugin (THIS IS THE FIX)
+RUN npm install -g ts-proto
 
 WORKDIR /app/src/frontend
 
 # generate protobuf
 RUN mkdir -p ./protos && \
     protoc -I /app/pb \
+    --plugin=protoc-gen-ts_proto=$(which protoc-gen-ts_proto) \
     --ts_proto_out=./protos \
     --ts_proto_opt=esModuleInterop=true \
     --ts_proto_opt=outputServices=grpc-js \
