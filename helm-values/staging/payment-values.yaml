@@ -1,0 +1,40 @@
+service:
+  name: payment
+  environment: staging
+
+image:
+  repository: ""
+  tag: ""
+  pullPolicy: IfNotPresent
+
+replicaCount: 2
+
+resources:
+  requests:
+    cpu: 200m
+    memory: 256Mi
+  limits:
+    cpu: 600m
+    memory: 512Mi
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 4
+  targetCPUUtilizationPercentage: 65
+  targetMemoryUtilizationPercentage: 75
+
+rollout:
+  strategy: canary
+  steps:
+    - setWeight: 25
+    - pause: 5m
+    - setWeight: 50
+    - pause: 10m
+    - setWeight: 100
+
+observability:
+  metrics:
+    enabled: true
+  tracing:
+    enabled: true

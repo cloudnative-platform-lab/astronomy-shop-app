@@ -3,9 +3,8 @@ service:
   environment: dev
 
 image:
-  repository: "241766333730.dkr.ecr.ap-south-1.amazonaws.com/astronomy-shop/payment"
-  tag: "c9ee165fd8bceee28ab49dd31240ce052a9e0f85"
-  digest: "sha256:0fb99c68042f45a1c44468c008e92008ee8428820c78272fca4785b6fe352a41"
+  repository: ""
+  tag: ""
   pullPolicy: IfNotPresent
 
 replicaCount: 1

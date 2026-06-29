@@ -1,0 +1,54 @@
+service:
+  name: image-provider
+  environment: dev
+  port: 8081
+  targetPort: 8081
+
+image:
+  repository: ""
+  tag: ""
+  digest: ""
+  pullPolicy: IfNotPresent
+
+replicaCount: 1
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  readOnlyRootFilesystem: false
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 200m
+    memory: 128Mi
+
+autoscaling:
+  enabled: true
+  minReplicas: 1
+  maxReplicas: 2
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+rollout:
+  strategy: rollingUpdate
+  maxUnavailable: 0
+  maxSurge: 1
+
+observability:
+  metrics:
+    enabled: true
+  tracing:
+    enabled: true
+
+env:
+  - name: IMAGE_PROVIDER_PORT
+    value: "8081"
+  - name: OTEL_COLLECTOR_HOST
+    value: "otel-collector"
+  - name: OTEL_COLLECTOR_PORT_GRPC
+    value: "4317"

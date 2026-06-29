@@ -1,0 +1,58 @@
+service:
+  name: image-provider
+  environment: staging
+  port: 8081
+  targetPort: 8081
+
+image:
+  repository: ""
+  tag: ""
+  digest: ""
+  pullPolicy: IfNotPresent
+
+replicaCount: 2
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  readOnlyRootFilesystem: false
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 300m
+    memory: 256Mi
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 4
+  targetCPUUtilizationPercentage: 65
+  targetMemoryUtilizationPercentage: 75
+
+rollout:
+  strategy: canary
+  steps:
+    - setWeight: 25
+    - pause: 5m
+    - setWeight: 50
+    - pause: 10m
+    - setWeight: 100
+
+observability:
+  metrics:
+    enabled: true
+  tracing:
+    enabled: true
+
+env:
+  - name: IMAGE_PROVIDER_PORT
+    value: "8081"
+  - name: OTEL_COLLECTOR_HOST
+    value: "otel-collector"
+  - name: OTEL_COLLECTOR_PORT_GRPC
+    value: "4317"

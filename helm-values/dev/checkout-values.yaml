@@ -1,11 +1,10 @@
 service:
-  name: recommendation
+  name: checkout
   environment: dev
 
 image:
-  repository: "241766333730.dkr.ecr.ap-south-1.amazonaws.com/astronomy-shop/recommendation"
-  tag: "4e561eff42935bd413e25ec8ef3095d321b773a6"
-  digest: "sha256:c337a053265e508048a7c92fe354239defeb12c16332a0e0451adc08f033a72a"
+  repository: ""
+  tag: ""
   pullPolicy: IfNotPresent
 
 replicaCount: 1

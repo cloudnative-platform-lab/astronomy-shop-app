@@ -1,11 +1,10 @@
 service:
-  name: product-catalog
+  name: recommendation
   environment: dev
 
 image:
-  repository: "241766333730.dkr.ecr.ap-south-1.amazonaws.com/astronomy-shop/product-catalog"
-  tag: "0c8d397ef3a51c4cd012e1d47645b71170e20d1b"
-  digest: "sha256:57e68af65f1c11cefda10a2e60252fe3830618cc5a0bfdc20dd65f118b2a2ed9"
+  repository: ""
+  tag: ""
   pullPolicy: IfNotPresent
 
 replicaCount: 1

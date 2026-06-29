@@ -1,0 +1,42 @@
+service:
+  name: frontend
+  environment: prod
+
+image:
+  repository: ""
+  tag: ""
+  pullPolicy: IfNotPresent
+
+replicaCount: 4
+
+resources:
+  requests:
+    cpu: 400m
+    memory: 512Mi
+  limits:
+    cpu: "1"
+    memory: 1Gi
+
+autoscaling:
+  enabled: true
+  minReplicas: 4
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 60
+  targetMemoryUtilizationPercentage: 70
+
+rollout:
+  strategy: canary
+  steps:
+    - setWeight: 10
+    - pause: 10m
+    - setWeight: 25
+    - pause: 15m
+    - setWeight: 50
+    - pause: 15m
+    - setWeight: 100
+
+observability:
+  metrics:
+    enabled: true
+  tracing:
+    enabled: true
