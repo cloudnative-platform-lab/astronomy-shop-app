@@ -20,6 +20,9 @@ spec:
         - podSelector:
             matchLabels:
               app.kubernetes.io/name: checkout
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: recommendation
       ports:
         - protocol: TCP
           port: 8080
