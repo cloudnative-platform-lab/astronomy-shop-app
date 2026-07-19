@@ -118,7 +118,7 @@ jobs:
             -t "${IMAGE_URI}" \
             .
 
-      # ---------------- IMAGE SCAN ----------------
+      # ---------------- IMAGE SCAN ---------------- #
       - name: Trivy image scan
         uses: aquasecurity/trivy-action@v0.19.0
         with:
