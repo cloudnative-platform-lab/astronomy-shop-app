@@ -85,7 +85,7 @@ jobs:
           severity: CRITICAL
           exit-code: '1'
 
-      # ---------------- IMAGE METADATA ----------------
+      # ---------------- IMAGE METADATA ---------------- #
       - name: Set image metadata
         run: |
           ECR_REPOSITORY_NAME="${PROJECT_NAME}/${SERVICE_NAME}"
