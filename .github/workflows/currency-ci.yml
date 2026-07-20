@@ -79,7 +79,7 @@ jobs:
           test -f "pb/demo.proto"
           python -m json.tool "${SERVICE_PATH}/data/currency_conversion.json" > /dev/null
 
-      # ---------------- SAST (CodeQL) ----------------
+      # ---------------- SAST (CodeQL) ---------------- #
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
         with:
