@@ -73,7 +73,7 @@ jobs:
         with:
           dotnet-version: 8.0.x
 
-      # ---------------- SAST (CodeQL) ----------------
+      # ---------------- SAST (CodeQL) ---------------- #
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
         with:
