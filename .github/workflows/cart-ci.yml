@@ -67,13 +67,13 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # ---------------- TESTS ---------------- #
+      # ---------------- TESTS ---------------- 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 8.0.x
 
-      # ---------------- SAST (CodeQL) ---------------- #
+      # ---------------- SAST (CodeQL) ---------------- 
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
         with:
@@ -88,7 +88,7 @@ jobs:
       - name: Analyze CodeQL
         uses: github/codeql-action/analyze@v3
 
-      # ---------------- DEPENDENCY SCAN ---------------- #
+      # ---------------- DEPENDENCY SCAN ---------------- 
       - name: Trivy FS scan
         uses: aquasecurity/trivy-action@v0.19.0
         with:
