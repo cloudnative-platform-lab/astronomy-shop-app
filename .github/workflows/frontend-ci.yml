@@ -75,13 +75,13 @@ jobs:
       - name: Verify frontend structure
         run: ls -la src/frontend
 
-      # ================= PROTOC ================= #
+      # ================= PROTOC ================= 
       - name: Setup Protoc
         uses: arduino/setup-protoc@v3
         with:
           version: '25.3'
 
-      # ================= NODE ================= #
+      # ================= NODE ================= 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
