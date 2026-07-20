@@ -97,7 +97,7 @@ jobs:
           echo "ECR_REPOSITORY=${ECR_REPOSITORY}" >> $GITHUB_ENV
           echo "IMAGE_URI=${IMAGE_URI}" >> $GITHUB_ENV
 
-      # ---------------- BUILD ----------------
+      # ---------------- BUILD ---------------- #
       - name: Build Docker image
         run: |
           docker build \
