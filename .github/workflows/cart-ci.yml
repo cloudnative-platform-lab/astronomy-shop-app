@@ -49,7 +49,7 @@ env:
   PROJECT_NAME: astronomy-shop
   SERVICE_NAME: cart
   SERVICE_PATH: src/cart
-  DOCKERFILE_PATH: src/cart/src/Dockerfile
+  DOCKERFILE_PATH: dockerfiles/cart.Dockerfile
 
   IMAGE_TAG: ${{ github.sha }}
 
@@ -73,7 +73,7 @@ jobs:
         with:
           dotnet-version: 8.0.x
 
-      # ---------------- SAST (CodeQL) ---------------- #
+      # ---------------- SAST (CodeQL) ----------------
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
         with:
@@ -88,7 +88,7 @@ jobs:
       - name: Analyze CodeQL
         uses: github/codeql-action/analyze@v3
 
-      # ---------------- DEPENDENCY SCAN ---------------- #
+      # ---------------- DEPENDENCY SCAN ----------------
       - name: Trivy FS scan
         uses: aquasecurity/trivy-action@v0.19.0
         with:
@@ -98,7 +98,7 @@ jobs:
           severity: CRITICAL
           exit-code: '1'
 
-      # ---------------- IMAGE METADATA ---------------- #
+      # ---------------- IMAGE METADATA ----------------
       - name: Set image metadata
         run: |
           ECR_REPOSITORY_NAME="${PROJECT_NAME}/${SERVICE_NAME}"
@@ -118,7 +118,7 @@ jobs:
             -t "${IMAGE_URI}" \
             .
 
-      # ---------------- IMAGE SCAN ---------------- #
+      # ---------------- IMAGE SCAN ----------------
       - name: Trivy image scan
         uses: aquasecurity/trivy-action@v0.19.0
         with:
@@ -211,6 +211,14 @@ jobs:
           COSIGN_YES: 'true'
 
       # ---------------- GITOPS DEV UPDATE ----------------
+      - name: Checkout GitOps repository
+        if: github.event_name == 'push'
+        uses: actions/checkout@v4
+        with:
+          repository: cloudnative-platform-lab/astronomy-shop-gitops
+          token: ${{ secrets.GITOPS_TOKEN }}
+          path: gitops
+
       - name: Update dev Helm values
         if: github.event_name == 'push'
         run: |
@@ -225,9 +233,10 @@ jobs:
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: '[CI] Update cart image in dev'
-          file_pattern: gitops/helm-values/dev/cart-values.yaml
+          repository: gitops
+          file_pattern: helm-values/dev/cart-values.yaml
 
-  # ================= PROMOTION ================= #
+  # ================= PROMOTION =================
   cart-promotion:
     name: Promote Image (staging/prod)
     if: github.event_name == 'workflow_dispatch'
@@ -237,6 +246,13 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Checkout GitOps repository
+        uses: actions/checkout@v4
+        with:
+          repository: cloudnative-platform-lab/astronomy-shop-gitops
+          token: ${{ secrets.GITOPS_TOKEN }}
+          path: gitops
 
       - name: Configure AWS
         if: inputs.image_tag != ''
@@ -281,4 +297,5 @@ jobs:
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: '[CI] Promote cart to ${{ inputs.promote_to }}'
-          file_pattern: gitops/helm-values/**/cart-values.yaml
+          repository: gitops
+          file_pattern: helm-values/**/cart-values.yaml
