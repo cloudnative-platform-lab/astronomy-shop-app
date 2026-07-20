@@ -18,8 +18,6 @@ on:
   pull_request:
     paths:
       - 'src/cart/**'
-      - 'gitops/charts/astronomy-shop-service/**'
-      - 'gitops/helm-values/**'
       - '.github/workflows/cart-ci.yml'
 
   push:
@@ -27,12 +25,10 @@ on:
       - main
     paths:
       - 'src/cart/**'
-      - 'gitops/charts/astronomy-shop-service/**'
-      - 'gitops/helm-values/**'
       - '.github/workflows/cart-ci.yml'
 
 permissions:
-  contents: write
+  contents: read
   id-token: write
   security-events: write
   attestations: write
@@ -53,9 +49,12 @@ env:
 
   IMAGE_TAG: ${{ github.sha }}
 
-  DEV_VALUES_FILE: gitops/helm-values/dev/cart-values.yaml
-  STAGING_VALUES_FILE: gitops/helm-values/staging/cart-values.yaml
-  PROD_VALUES_FILE: gitops/helm-values/prod/cart-values.yaml
+  GITOPS_REPO: cloudnative-platform-lab/astronomy-shop-gitops
+  GITOPS_DIR: gitops-repo
+
+  DEV_VALUES_FILE: gitops-repo/helm-values/dev/cart-values.yaml
+  STAGING_VALUES_FILE: gitops-repo/helm-values/staging/cart-values.yaml
+  PROD_VALUES_FILE: gitops-repo/helm-values/prod/cart-values.yaml
 
 jobs:
   cart-ci:
@@ -210,6 +209,15 @@ jobs:
         env:
           COSIGN_YES: 'true'
 
+      # ---------------- CHECKOUT GITOPS REPO ----------------
+      - name: Checkout gitops repo
+        if: github.event_name == 'push'
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.GITOPS_REPO }}
+          token: ${{ secrets.GITOPS_PAT }}
+          path: ${{ env.GITOPS_DIR }}
+
       # ---------------- GITOPS DEV UPDATE ----------------
       - name: Update dev Helm values
         if: github.event_name == 'push'
@@ -224,8 +232,11 @@ jobs:
         if: github.event_name == 'push'
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
+          repository: ${{ env.GITOPS_DIR }}
           commit_message: '[CI] Update cart image in dev'
-          file_pattern: gitops/helm-values/dev/cart-values.yaml
+          file_pattern: helm-values/dev/cart-values.yaml
+          commit_user_name: github-actions[bot]
+          commit_user_email: github-actions[bot]@users.noreply.github.com
 
   # ================= PROMOTION ================= #
   cart-promotion:
@@ -235,8 +246,15 @@ jobs:
     environment: ${{ inputs.promote_to }}
 
     steps:
-      - name: Checkout
+      - name: Checkout app repo
         uses: actions/checkout@v4
+
+      - name: Checkout gitops repo
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.GITOPS_REPO }}
+          token: ${{ secrets.GITOPS_PAT }}
+          path: ${{ env.GITOPS_DIR }}
 
       - name: Configure AWS
         if: inputs.image_tag != ''
@@ -280,5 +298,8 @@ jobs:
       - name: Commit promotion
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
+          repository: ${{ env.GITOPS_DIR }}
           commit_message: '[CI] Promote cart to ${{ inputs.promote_to }}'
-          file_pattern: gitops/helm-values/**/cart-values.yaml
+          file_pattern: helm-values/**/cart-values.yaml
+          commit_user_name: github-actions[bot]
+          commit_user_email: github-actions[bot]@users.noreply.github.com
