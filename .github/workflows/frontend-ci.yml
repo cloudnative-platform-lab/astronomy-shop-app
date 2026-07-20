@@ -89,7 +89,7 @@ jobs:
           cache: npm
           cache-dependency-path: src/frontend/package-lock.json
 
-      # ================= TRIVY FS SCAN =================
+      # ================= TRIVY FS SCAN ================= #
       - name: Trivy FS scan (source only)
         uses: aquasecurity/trivy-action@v0.19.0
         with:
