@@ -67,7 +67,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # ---------------- STATIC VALIDATION ----------------
+      # ---------------- STATIC VALIDATION ---------------- #
       - name: Validate static image provider files
         run: |
           test -f "${SERVICE_PATH}/Dockerfile"
