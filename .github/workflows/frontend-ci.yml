@@ -71,7 +71,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # ================= DEBUG ================= #
+      # ================= DEBUG ================= 
       - name: Verify frontend structure
         run: ls -la src/frontend
 
