@@ -55,9 +55,9 @@ env:
 
   IMAGE_TAG: ${{ github.sha }}
 
-  DEV_VALUES_FILE: helm/frontend/values.yaml
-  STAGING_VALUES_FILE: helm/frontend/values.yaml
-  PROD_VALUES_FILE: helm/frontend/values.yaml
+  DEV_VALUES_FILE: gitops/helm-values/dev/frontend-values.yaml
+  STAGING_VALUES_FILE: gitops/helm-values/staging/frontend-values.yaml
+  PROD_VALUES_FILE: gitops/helm-values/prod/frontend-values.yaml
 
 
 jobs:
@@ -106,7 +106,6 @@ jobs:
         working-directory: src/frontend
 
       # ================= TEST =================
-# ================= TEST =================
         # This project currently does not include an automated test suite or a
         # "test" script in src/frontend/package.json.
         #
@@ -237,6 +236,14 @@ jobs:
         env:
           COSIGN_YES: 'true'
 
+      - name: Checkout GitOps repository
+        if: github.event_name == 'push'
+        uses: actions/checkout@v4
+        with:
+          repository: cloudnative-platform-lab/astronomy-shop-gitops
+          token: ${{ secrets.GITOPS_TOKEN }}
+          path: gitops
+
       # ================= DEV UPDATE =================
       - name: Update dev Helm values
         if: github.event_name == 'push'
@@ -252,7 +259,8 @@ jobs:
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: '[CI] Update frontend image in dev'
-          file_pattern: helm/frontend/values.yaml
+          repository: gitops
+          file_pattern: helm-values/dev/frontend-values.yaml
 
 
   # ================= PROMOTION =================
@@ -265,6 +273,13 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Checkout GitOps repository
+        uses: actions/checkout@v4
+        with:
+          repository: cloudnative-platform-lab/astronomy-shop-gitops
+          token: ${{ secrets.GITOPS_TOKEN }}
+          path: gitops
 
       - name: Configure AWS
         uses: aws-actions/configure-aws-credentials@v4
@@ -308,4 +323,5 @@ jobs:
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: '[CI] Promote frontend to ${{ inputs.promote_to }}'
-          file_pattern: gitops/helm-vals/**/frontend-values.yaml
+          repository: gitops
+          file_pattern: helm-values/**/frontend-values.yaml
