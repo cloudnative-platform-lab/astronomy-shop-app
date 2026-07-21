@@ -197,6 +197,14 @@ jobs:
         env:
           COSIGN_YES: 'true'
 
+      - name: Checkout GitOps repository
+        if: github.event_name == 'push'
+        uses: actions/checkout@v4
+        with:
+          repository: cloudnative-platform-lab/astronomy-shop-gitops
+          token: ${{ secrets.GITOPS_TOKEN }}
+          path: gitops          
+
       # ---------------- GITOPS DEV UPDATE ----------------
       - name: Update dev Helm values
         if: github.event_name == 'push'
@@ -212,8 +220,8 @@ jobs:
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: '[CI] Update image-provider image in dev'
-          file_pattern: gitops/helm-values/dev/image-provider-values.yaml
-
+          repository: gitops
+          file_pattern: helm-values/dev/image-provider-values.yaml
   # ================= PROMOTION ================= #
   image-provider-promotion:
     name: Promote Image (staging/prod)
@@ -224,6 +232,13 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Checkout GitOps repository
+        uses: actions/checkout@v4
+        with:
+          repository: cloudnative-platform-lab/astronomy-shop-gitops
+          token: ${{ secrets.GITOPS_TOKEN }}
+          path: gitops
 
       - name: Configure AWS
         if: inputs.image_tag != ''
@@ -268,4 +283,5 @@ jobs:
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: '[CI] Promote image-provider to ${{ inputs.promote_to }}'
-          file_pattern: gitops/helm-values/**/image-provider-values.yaml
+          repository: gitops
+          file_pattern: helm-values/**/image-provider-values.yaml
