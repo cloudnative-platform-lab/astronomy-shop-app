@@ -152,6 +152,16 @@ jobs:
           path: cart-sbom.spdx.json
 
       # ---------------- AWS PUSH (ONLY MAIN) ----------------
+      - name: Show GitHub OIDC identity
+        if: github.event_name == 'push'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const token = await core.getIDToken('sts.amazonaws.com');
+            const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString());
+            core.info(`OIDC audience: ${payload.aud}`);
+            core.info(`OIDC subject: ${payload.sub}`);
+
       - name: Configure AWS
         if: github.event_name == 'push'
         uses: aws-actions/configure-aws-credentials@v4
