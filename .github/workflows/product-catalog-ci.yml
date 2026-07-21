@@ -216,6 +216,14 @@ jobs:
         env:
           COSIGN_YES: "true"
 
+      - name: Checkout GitOps repository
+        if: github.event_name == 'push'
+        uses: actions/checkout@v4
+        with:
+          repository: cloudnative-platform-lab/astronomy-shop-gitops
+          token: ${{ secrets.GITOPS_TOKEN }}
+          path: gitops
+
       # ---------------- GITOPS DEV UPDATE ----------------
       - name: Update dev Helm values
         if: github.event_name == 'push'
@@ -231,8 +239,8 @@ jobs:
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: "[CI] Update product-catalog image in dev"
-          file_pattern: gitops/helm-values/dev/product-catalog-values.yaml
-
+          repository: gitops
+          file_pattern: helm-values/dev/product-catalog-values.yaml
 
   # ================= PROMOTION =================
   product-catalog-promotion:
@@ -244,6 +252,13 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Checkout GitOps repository
+        uses: actions/checkout@v4
+        with:
+          repository: cloudnative-platform-lab/astronomy-shop-gitops
+          token: ${{ secrets.GITOPS_TOKEN }}
+          path: gitops
 
       - name: Configure AWS
         if: inputs.image_tag != ''
@@ -275,6 +290,8 @@ jobs:
               --query 'imageDetails[0].imageDigest' \
               --output text)
 
+            ECR_REPOSITORY="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${PROJECT_NAME}/${SERVICE_NAME}"   
+
             EXTRA_ARGS="--repository ${ECR_REPOSITORY} --tag ${IMAGE_TAG} --digest ${IMAGE_DIGEST}"
           fi
 
@@ -287,7 +304,6 @@ jobs:
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: "[CI] Promote product-catalog to ${{ inputs.promote_to }}"
-          file_pattern: gitops/helm-values/**/product-catalog-values.yaml
+          repository: gitops
+          file_pattern: helm-values/**/product-catalog-values.yaml
 
-
-#testing
