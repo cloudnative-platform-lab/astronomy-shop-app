@@ -150,8 +150,17 @@ jobs:
         with:
           name: cart-sbom
           path: cart-sbom.spdx.json
-
+  
       # ---------------- AWS PUSH (ONLY MAIN) ----------------
+
+      - name: Debug AWS OIDC context
+        if: github.event_name == 'push'
+        run: |
+          echo "Repository: ${{ github.repository }}"
+          echo "Branch: ${{ github.ref }}"
+          echo "Event: ${{ github.event_name }}"
+          echo "Role: ${{ env.AWS_ROLE_ARN }}"
+          
       - name: Configure AWS
         if: github.event_name == 'push'
         uses: aws-actions/configure-aws-credentials@v4
