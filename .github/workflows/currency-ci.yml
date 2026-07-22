@@ -299,4 +299,5 @@ jobs:
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: '[CI] Promote currency to ${{ inputs.promote_to }}'
-          file_pattern: gitops/helm-values/**/currency-values.yaml
+          repository: gitops
+          file_pattern: helm-values/**/currency-values.yaml
