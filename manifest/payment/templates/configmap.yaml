@@ -1,9 +1,0 @@
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: payment-config
-  labels:
-    app.kubernetes.io/name: payment
-    app.kubernetes.io/part-of: astronomy-shop
-data:
-  ENVIRONMENT: dev
