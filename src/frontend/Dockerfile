@@ -56,7 +56,7 @@ COPY --from=deps /app/src/frontend/node_modules ./node_modules
 COPY --from=builder --chown=nextjs:nodejs /app/src/frontend/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/src/frontend/.next/static ./.next/static
 
-USER nextjs
+USER 1001:1001
 
 EXPOSE 8080
 
