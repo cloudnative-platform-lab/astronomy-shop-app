@@ -29,6 +29,6 @@ COPY --from=builder /app/checkout /app/checkout
 
 EXPOSE 8080
 
-USER nonroot:nonroot
+USER 65532:65532
 
 ENTRYPOINT ["/app/checkout"]

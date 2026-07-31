@@ -3,9 +3,17 @@ name: Frontend CI/CD
 on:
   workflow_dispatch:
     inputs:
+      operation:
+        description: Build a new frontend image for Dev, or promote an existing image.
+        required: true
+        default: build-dev
+        type: choice
+        options:
+          - build-dev
+          - promote
       promote_to:
         description: Environment to promote the existing frontend image to
-        required: true
+        required: false
         type: choice
         options:
           - staging
@@ -63,7 +71,7 @@ env:
 jobs:
   frontend-ci:
     name: CI - Test, Scan, Build, Dev Update
-    if: github.event_name != 'workflow_dispatch'
+    if: github.event_name != 'workflow_dispatch' || inputs.operation == 'build-dev'
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -277,7 +285,7 @@ jobs:
   # ================= PROMOTION =================
   frontend-promotion:
     name: Promote Image (staging/prod)
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && inputs.operation == 'promote'
     runs-on: ubuntu-latest
     environment: ${{ inputs.promote_to }}
 
@@ -301,6 +309,11 @@ jobs:
       - name: Promote image
         run: |
           set -e
+
+          if [ -z "${{ inputs.promote_to }}" ]; then
+            echo "Select staging or prod when operation is promote."
+            exit 1
+          fi
 
           SOURCE_FILE="${DEV_VALUES_FILE}"
           DEST_FILE="${STAGING_VALUES_FILE}"
