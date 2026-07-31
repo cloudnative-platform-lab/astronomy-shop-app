@@ -40,8 +40,12 @@ RUN cd /currency \
 
 FROM alpine:3.18 AS release
 
-RUN apk update && apk add grpc-dev protobuf-dev
-COPY --from=builder /usr/local /usr/local
+RUN apk update \
+    && apk add grpc-dev protobuf-dev \
+    && addgroup -S -g 10001 currency \
+    && adduser -S -D -H -u 10001 -G currency currency
+COPY --chown=10001:10001 --from=builder /usr/local /usr/local
 
 EXPOSE ${CURRENCY_PORT}
+USER 10001:10001
 ENTRYPOINT ["sh", "-c", "./usr/local/bin/currency ${CURRENCY_PORT}"]

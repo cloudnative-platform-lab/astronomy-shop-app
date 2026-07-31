@@ -14,13 +14,13 @@ RUN apk add --no-cache python3 make g++ && npm ci --omit=dev
 
 FROM node:22-alpine
 
-USER node
+USER 1000:1000
 WORKDIR /usr/src/app/
 ENV NODE_ENV=production
 
-COPY --chown=node:node --from=build /usr/src/app/node_modules/ ./node_modules/
-COPY ./src/payment/ ./
-COPY ./pb/demo.proto ./
+COPY --chown=1000:1000 --from=build /usr/src/app/node_modules/ ./node_modules/
+COPY --chown=1000:1000 ./src/payment/ ./
+COPY --chown=1000:1000 ./pb/demo.proto ./
 
 EXPOSE ${PAYMENT_PORT}
 ENTRYPOINT [ "npm", "run", "start" ]
