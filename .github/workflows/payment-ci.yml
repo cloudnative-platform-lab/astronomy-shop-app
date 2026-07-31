@@ -174,7 +174,7 @@ jobs:
         if: github.event_name == 'push'
         run: docker push "${IMAGE_URI}"
 
-      # ---------------- DIGEST RESOLVE ----------------
+      # ---------------- DIGEST RESOLVE -----------------
       - name: Resolve image digest
         if: github.event_name == 'push'
         run: |
