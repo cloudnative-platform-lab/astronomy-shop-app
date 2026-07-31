@@ -1,0 +1,141 @@
+name: Build Missing Dev Service Image
+
+on:
+  workflow_dispatch:
+    inputs:
+      service:
+        description: Service to build, scan, push, and deploy to Dev
+        required: true
+        type: choice
+        options:
+          - cart
+          - currency
+          - image-provider
+          - payment
+          - product-catalog
+          - recommendation
+
+permissions:
+  contents: write
+  id-token: write
+  security-events: write
+
+concurrency:
+  group: manual-dev-image-build-${{ inputs.service }}
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION }}
+  AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
+  AWS_ROLE_ARN: ${{ vars.AWS_ROLE_ARN }}
+  PROJECT_NAME: astronomy-shop
+  SERVICE_NAME: ${{ inputs.service }}
+  IMAGE_TAG: ${{ github.sha }}
+
+jobs:
+  build-and-update-dev:
+    name: Build, scan, and update Dev image
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout application source
+        uses: actions/checkout@v4
+
+      - name: Select service build configuration
+        shell: bash
+        run: |
+          case "${SERVICE_NAME}" in
+            cart)
+              echo "DOCKERFILE_PATH=src/cart/src/Dockerfile" >> "$GITHUB_ENV"
+              echo "BUILD_CONTEXT=." >> "$GITHUB_ENV"
+              ;;
+            currency)
+              echo "DOCKERFILE_PATH=src/currency/Dockerfile" >> "$GITHUB_ENV"
+              echo "BUILD_CONTEXT=." >> "$GITHUB_ENV"
+              echo "CURRENCY_BUILD=true" >> "$GITHUB_ENV"
+              ;;
+            image-provider)
+              echo "DOCKERFILE_PATH=src/image-provider/Dockerfile" >> "$GITHUB_ENV"
+              echo "BUILD_CONTEXT=." >> "$GITHUB_ENV"
+              ;;
+            payment)
+              echo "DOCKERFILE_PATH=src/payment/Dockerfile" >> "$GITHUB_ENV"
+              echo "BUILD_CONTEXT=." >> "$GITHUB_ENV"
+              ;;
+            product-catalog)
+              echo "DOCKERFILE_PATH=src/product-catalog/Dockerfile" >> "$GITHUB_ENV"
+              echo "BUILD_CONTEXT=src/product-catalog" >> "$GITHUB_ENV"
+              ;;
+            recommendation)
+              echo "DOCKERFILE_PATH=src/recommendation/Dockerfile" >> "$GITHUB_ENV"
+              echo "BUILD_CONTEXT=." >> "$GITHUB_ENV"
+              ;;
+          esac
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build container image
+        shell: bash
+        run: |
+          ECR_REPOSITORY="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${PROJECT_NAME}/${SERVICE_NAME}"
+          IMAGE_URI="${ECR_REPOSITORY}:${IMAGE_TAG}"
+          build_args=()
+
+          if [ "${CURRENCY_BUILD:-false}" = "true" ]; then
+            build_args+=(--build-arg "OPENTELEMETRY_CPP_VERSION=${OPENTELEMETRY_CPP_VERSION:-1.17.0}")
+          fi
+
+          docker build "${build_args[@]}" -f "${DOCKERFILE_PATH}" -t "${IMAGE_URI}" "${BUILD_CONTEXT}"
+          echo "ECR_REPOSITORY=${ECR_REPOSITORY}" >> "$GITHUB_ENV"
+          echo "IMAGE_URI=${IMAGE_URI}" >> "$GITHUB_ENV"
+
+      - name: Scan container image
+        uses: aquasecurity/trivy-action@v0.19.0
+        with:
+          image-ref: ${{ env.IMAGE_URI }}
+          format: table
+          severity: CRITICAL,HIGH
+          exit-code: '1'
+
+      - name: Push container image
+        run: docker push "${IMAGE_URI}"
+
+      - name: Resolve immutable image digest
+        shell: bash
+        run: |
+          IMAGE_DIGEST=$(aws ecr describe-images \
+            --repository-name "${PROJECT_NAME}/${SERVICE_NAME}" \
+            --image-ids imageTag="${IMAGE_TAG}" \
+            --query 'imageDetails[0].imageDigest' \
+            --output text)
+          test -n "${IMAGE_DIGEST}"
+          echo "IMAGE_DIGEST=${IMAGE_DIGEST}" >> "$GITHUB_ENV"
+
+      - name: Checkout GitOps repository
+        uses: actions/checkout@v4
+        with:
+          repository: cloudnative-platform-lab/astronomy-shop-gitops
+          token: ${{ secrets.GITOPS_TOKEN }}
+          path: gitops
+
+      - name: Update Dev image values
+        run: |
+          python scripts/ci/update_image_values.py set \
+            --file "gitops/helm-values/dev/${SERVICE_NAME}-values.yaml" \
+            --repository "${ECR_REPOSITORY}" \
+            --tag "${IMAGE_TAG}" \
+            --digest "${IMAGE_DIGEST}"
+
+      - name: Commit Dev image update
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "[CI] Update ${{ inputs.service }} image in dev"
+          repository: gitops
+          file_pattern: helm-values/dev/${{ inputs.service }}-values.yaml
