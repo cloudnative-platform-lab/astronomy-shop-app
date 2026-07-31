@@ -82,7 +82,8 @@ namespace
     {"ZAR", 16.0583},
   };
 
-  std::string version = std::getenv("VERSION"); 
+  const char *version_value = std::getenv("VERSION");
+  std::string version = version_value != nullptr ? version_value : "dev";
   std::string name{ "currency" };
 
   nostd::unique_ptr<metrics_api::Counter<uint64_t>> currency_counter;
