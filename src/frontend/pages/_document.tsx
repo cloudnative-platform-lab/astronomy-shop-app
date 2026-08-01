@@ -22,17 +22,16 @@ export default class MyDocument extends Document<{ envString: string }> {
       const baggage = propagation.getBaggage(context.active());
       const isSyntheticRequest = baggage?.getEntry('synthetic_request')?.value === 'true';
 
-      const otlpTracesEndpoint = isSyntheticRequest
-          ? `http://${OTEL_COLLECTOR_HOST}:4318/v1/traces`
-          : PUBLIC_OTEL_EXPORTER_OTLP_TRACES_ENDPOINT;
+      const otlpTracesEndpoint = isSyntheticRequest && OTEL_COLLECTOR_HOST
+        ? `http://${OTEL_COLLECTOR_HOST}:4318/v1/traces`
+        : PUBLIC_OTEL_EXPORTER_OTLP_TRACES_ENDPOINT;
 
-      const envString = `
-        window.ENV = {
-          NEXT_PUBLIC_PLATFORM: '${ENV_PLATFORM}',
-          NEXT_PUBLIC_OTEL_SERVICE_NAME: '${WEB_OTEL_SERVICE_NAME}',
-          NEXT_PUBLIC_OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: '${otlpTracesEndpoint}',
-          IS_SYNTHETIC_REQUEST: '${isSyntheticRequest}',
-        };`;
+      const envString = `window.ENV = ${JSON.stringify({
+        NEXT_PUBLIC_PLATFORM: ENV_PLATFORM || 'dev',
+        NEXT_PUBLIC_OTEL_SERVICE_NAME: WEB_OTEL_SERVICE_NAME || 'frontend',
+        NEXT_PUBLIC_OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: otlpTracesEndpoint || '',
+        IS_SYNTHETIC_REQUEST: String(isSyntheticRequest),
+      })};`;
       return {
         ...initialProps,
         styles: [initialProps.styles, sheet.getStyleElement()],

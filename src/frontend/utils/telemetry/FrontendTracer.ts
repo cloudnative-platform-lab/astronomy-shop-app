@@ -20,6 +20,17 @@ const {
 } = typeof window !== 'undefined' ? window.ENV : {};
 
 const FrontendTracer = () => {
+  const configuredEndpoint = NEXT_PUBLIC_OTEL_EXPORTER_OTLP_TRACES_ENDPOINT.trim();
+  const endpoint = configuredEndpoint && configuredEndpoint !== 'undefined' && configuredEndpoint !== 'null'
+    ? configuredEndpoint
+    : typeof window !== 'undefined'
+      ? `${window.location.origin}/otlp-http/v1/traces`
+      : '';
+
+  if (!endpoint) {
+    return;
+  }
+
   let resource = new Resource({
     [SemanticResourceAttributes.SERVICE_NAME]: NEXT_PUBLIC_OTEL_SERVICE_NAME,
   });
@@ -33,7 +44,7 @@ const FrontendTracer = () => {
   provider.addSpanProcessor(
     new BatchSpanProcessor(
       new OTLPTraceExporter({
-        url: NEXT_PUBLIC_OTEL_EXPORTER_OTLP_TRACES_ENDPOINT || 'http://localhost:4318/v1/traces',
+        url: endpoint,
       }),
       {
         scheduledDelayMillis: 500,
