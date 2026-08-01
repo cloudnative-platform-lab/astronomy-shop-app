@@ -1,27 +1,17 @@
-# Copyright The OpenTelemetry Authors
-# SPDX-License-Identifier: Apache-2.0
+FROM golang:1.24-alpine AS builder
 
+WORKDIR /workspace
 
-FROM ruby:3.2.2-slim AS base
+COPY src/checkout ./src/checkout
+COPY src/email ./src/email
 
-FROM base AS builder
+RUN cd src/email && \
+    CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags='-s -w' -o /out/email .
 
-WORKDIR /tmp
+FROM gcr.io/distroless/static:nonroot
 
-COPY ./src/email/Gemfile ./src/email/Gemfile.lock ./
+COPY --from=builder /out/email /app/email
 
-#RUN apk update && apk add make gcc musl-dev gcompat && bundle install
-RUN apt-get update && apt-get install build-essential -y && bundle install
-FROM base AS release
-
-WORKDIR /email_server
-
-COPY ./src/email/ .
-
-RUN chmod 666 ./Gemfile.lock
-
-COPY --from=builder /usr/local/bundle/ /usr/local/bundle/
-
-
-EXPOSE ${EMAIL_PORT}
-ENTRYPOINT ["bundle", "exec", "ruby", "email_server.rb"]
+USER 65532:65532
+EXPOSE 8080
+ENTRYPOINT ["/app/email"]

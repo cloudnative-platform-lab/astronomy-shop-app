@@ -61,5 +61,9 @@ WORKDIR /app
 COPY --from=builder /app/target/release/shipping /app/shipping
 COPY --from=builder /bin/grpc_health_probe /bin/grpc_health_probe
 
+RUN groupadd --gid 10001 shipping && \
+    useradd --uid 10001 --gid shipping --no-create-home --shell /usr/sbin/nologin shipping
+
 EXPOSE ${SHIPPING_PORT}
+USER 10001:10001
 ENTRYPOINT ["/app/shipping"]

@@ -10,10 +10,12 @@ on:
         options:
           - cart
           - currency
+          - email
           - image-provider
           - payment
           - product-catalog
           - recommendation
+          - shipping
 
 permissions:
   contents: write
@@ -54,6 +56,10 @@ jobs:
               echo "BUILD_CONTEXT=." >> "$GITHUB_ENV"
               echo "CURRENCY_BUILD=true" >> "$GITHUB_ENV"
               ;;
+            email)
+              echo "DOCKERFILE_PATH=src/email/Dockerfile" >> "$GITHUB_ENV"
+              echo "BUILD_CONTEXT=." >> "$GITHUB_ENV"
+              ;;
             image-provider)
               echo "DOCKERFILE_PATH=src/image-provider/Dockerfile" >> "$GITHUB_ENV"
               echo "BUILD_CONTEXT=." >> "$GITHUB_ENV"
@@ -68,6 +74,10 @@ jobs:
               ;;
             recommendation)
               echo "DOCKERFILE_PATH=src/recommendation/Dockerfile" >> "$GITHUB_ENV"
+              echo "BUILD_CONTEXT=." >> "$GITHUB_ENV"
+              ;;
+            shipping)
+              echo "DOCKERFILE_PATH=src/shipping/Dockerfile" >> "$GITHUB_ENV"
               echo "BUILD_CONTEXT=." >> "$GITHUB_ENV"
               ;;
           esac
