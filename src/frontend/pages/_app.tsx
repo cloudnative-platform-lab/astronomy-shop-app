@@ -19,6 +19,7 @@ declare global {
       NEXT_PUBLIC_PLATFORM?: string;
       NEXT_PUBLIC_OTEL_SERVICE_NAME?: string;
       NEXT_PUBLIC_OTEL_EXPORTER_OTLP_TRACES_ENDPOINT?: string;
+      NEXT_PUBLIC_FEATURE_FLAGS_ENABLED?: boolean;
       IS_SYNTHETIC_REQUEST?: string;
     };
   }
@@ -26,7 +27,7 @@ declare global {
 
 if (typeof window !== 'undefined') {
   FrontendTracer();
-  if (window.location) {
+  if (window.ENV?.NEXT_PUBLIC_FEATURE_FLAGS_ENABLED === true && window.location) {
     const session = SessionGateway.getSession();
 
     // Set context prior to provider init to avoid multiple http calls
