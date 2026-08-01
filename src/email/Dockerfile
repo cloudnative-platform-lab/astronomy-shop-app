@@ -6,6 +6,7 @@ COPY src/checkout ./src/checkout
 COPY src/email ./src/email
 
 RUN cd src/email && \
+    go mod tidy && \
     CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags='-s -w' -o /out/email .
 
 FROM gcr.io/distroless/static:nonroot
