@@ -188,7 +188,7 @@ jobs:
       # ================= AWS PUSH =================
 
       - name: Show GitHub OIDC identity
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.operation == 'build-dev')
         uses: actions/github-script@v7
         with:
           script: |
@@ -198,23 +198,23 @@ jobs:
             core.info(`OIDC subject: ${payload.sub}`);
       
       - name: Configure AWS
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.operation == 'build-dev')
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ env.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Login to ECR
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.operation == 'build-dev')
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: Push image
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.operation == 'build-dev')
         run: docker push "${IMAGE_URI}"
 
       # ================= DIGEST ================= #
       - name: Resolve image digest
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.operation == 'build-dev')
         run: |
           IMAGE_DIGEST=$(aws ecr describe-images \
             --repository-name "${ECR_REPOSITORY_NAME}" \
@@ -227,18 +227,18 @@ jobs:
 
       # ================= COSIGN =================
       - name: Install Cosign
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.operation == 'build-dev')
         uses: sigstore/cosign-installer@v3
 
       - name: Sign image
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.operation == 'build-dev')
         run: cosign sign "${IMAGE_REF}"
         env:
           COSIGN_YES: 'true'
 
       # ================= ATTESTATION =================
       - name: Provenance attestation
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.operation == 'build-dev')
         uses: actions/attest-build-provenance@v2
         with:
           subject-name: ${{ env.ECR_REPOSITORY }}
@@ -246,7 +246,7 @@ jobs:
           push-to-registry: true
 
       - name: SBOM attestation
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.operation == 'build-dev')
         run: |
           cosign attest \
             --predicate frontend-sbom.spdx.json \
@@ -256,7 +256,7 @@ jobs:
           COSIGN_YES: 'true'
 
       - name: Checkout GitOps repository
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.operation == 'build-dev')
         uses: actions/checkout@v4
         with:
           repository: cloudnative-platform-lab/astronomy-shop-gitops
@@ -265,7 +265,7 @@ jobs:
 
       # ================= DEV UPDATE =================
       - name: Update dev Helm values
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.operation == 'build-dev')
         run: |
           python scripts/ci/update_image_values.py set \
             --file "${DEV_VALUES_FILE}" \
@@ -274,7 +274,7 @@ jobs:
             --digest "${IMAGE_DIGEST}"
 
       - name: Commit dev update
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.operation == 'build-dev')
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: '[CI] Update frontend image in dev'
