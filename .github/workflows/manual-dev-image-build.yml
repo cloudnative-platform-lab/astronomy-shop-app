@@ -1,10 +1,10 @@
-name: Build Missing Dev Service Image
+name: Build Missing Service Image
 
 on:
   workflow_dispatch:
     inputs:
       service:
-        description: Service to build, scan, push, and deploy to Dev
+        description: Service to build, scan, push, and update in GitOps
         required: true
         type: choice
         options:
@@ -16,6 +16,14 @@ on:
           - product-catalog
           - recommendation
           - shipping
+      target_environment:
+        description: Environment values file to update
+        required: true
+        default: dev
+        type: choice
+        options:
+          - dev
+          - staging
 
 permissions:
   contents: write
@@ -23,7 +31,7 @@ permissions:
   security-events: write
 
 concurrency:
-  group: manual-dev-image-build-${{ inputs.service }}
+  group: manual-image-build-${{ inputs.service }}-${{ inputs.target_environment }}
   cancel-in-progress: false
 
 env:
@@ -35,8 +43,8 @@ env:
   IMAGE_TAG: ${{ github.sha }}
 
 jobs:
-  build-and-update-dev:
-    name: Build, scan, and update Dev image
+  build-and-update:
+    name: Build, scan, and update ${{ inputs.target_environment }} image
     runs-on: ubuntu-latest
 
     steps:
@@ -135,17 +143,17 @@ jobs:
           token: ${{ secrets.GITOPS_TOKEN }}
           path: gitops
 
-      - name: Update Dev image values
+      - name: Update environment image values
         run: |
           python scripts/ci/update_image_values.py set \
-            --file "gitops/helm-values/dev/${SERVICE_NAME}-values.yaml" \
+            --file "gitops/helm-values/${{ inputs.target_environment }}/${SERVICE_NAME}-values.yaml" \
             --repository "${ECR_REPOSITORY}" \
             --tag "${IMAGE_TAG}" \
             --digest "${IMAGE_DIGEST}"
 
-      - name: Commit Dev image update
+      - name: Commit environment image update
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: "[CI] Update ${{ inputs.service }} image in dev"
+          commit_message: "[CI] Update ${{ inputs.service }} image in ${{ inputs.target_environment }}"
           repository: gitops
-          file_pattern: helm-values/dev/${{ inputs.service }}-values.yaml
+          file_pattern: helm-values/${{ inputs.target_environment }}/${{ inputs.service }}-values.yaml
