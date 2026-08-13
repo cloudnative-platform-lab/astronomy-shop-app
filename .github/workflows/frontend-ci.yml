@@ -210,7 +210,14 @@ jobs:
 
       - name: Push image
         if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.operation == 'build-dev')
-        run: docker push "${IMAGE_URI}"
+        run: |
+          if aws ecr describe-images \
+            --repository-name "${ECR_REPOSITORY_NAME}" \
+            --image-ids imageTag="${IMAGE_TAG}" >/dev/null 2>&1; then
+            echo "Immutable image tag already exists; reusing ${IMAGE_URI}."
+          else
+            docker push "${IMAGE_URI}"
+          fi
 
       # ================= DIGEST ================= #
       - name: Resolve image digest
