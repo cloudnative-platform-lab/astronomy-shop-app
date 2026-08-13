@@ -6,6 +6,7 @@ import { ListRecommendationsResponse, RecommendationServiceClient } from '../../
 import { runtimeAddress } from './runtime';
 
 const client = () => new RecommendationServiceClient(runtimeAddress('RECOMMENDATION_ADDR'), ChannelCredentials.createInsecure());
+const recommendationDeadlineMs = 5000;
 
 type RecommendationResult = {
   response: ListRecommendationsResponse;
@@ -16,15 +17,29 @@ const RecommendationsGateway = () => ({
   listRecommendations(userId: string, productIds: string[]) {
     return new Promise<RecommendationResult>((resolve, reject) => {
       let recommendationResponse: ListRecommendationsResponse | undefined;
+      let settled = false;
+      const recommendationClient = client();
 
-      const call = client().listRecommendations({ userId, productIds }, (error, response) => {
+      const complete = (callback: () => void) => {
+        if (settled) {
+          return;
+        }
+
+        settled = true;
+        recommendationClient.close();
+        callback();
+      };
+
+      const call = recommendationClient.listRecommendations({ userId, productIds }, {
+        deadline: new Date(Date.now() + recommendationDeadlineMs),
+      }, (error, response) => {
         if (error) {
-          reject(error);
+          complete(() => reject(error));
           return;
         }
 
         if (!response) {
-          reject(new Error('Recommendation service returned no response'));
+          complete(() => reject(new Error('Recommendation service returned no response')));
           return;
         }
 
@@ -40,8 +55,8 @@ const RecommendationsGateway = () => ({
           .get('x-astronomy-shop-recommendation-revision')
           .find((value): value is string => typeof value === 'string');
 
-        resolve({ response: recommendationResponse, servingRevision });
-      })
+        complete(() => resolve({ response: recommendationResponse, servingRevision }));
+      });
     });
   },
 });

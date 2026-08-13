@@ -38,6 +38,7 @@ from metrics import (
 
 cached_ids = []
 first_run = True
+product_catalog_timeout_seconds = 5
 
 class RecommendationService(demo_pb2_grpc.RecommendationServiceServicer):
     def ListRecommendations(self, request, context):
@@ -84,7 +85,8 @@ def get_product_list(request_product_ids):
                 first_run = False
                 span.set_attribute("app.cache_hit", False)
                 logger.info("get_product_list: cache miss")
-                cat_response = product_catalog_stub.ListProducts(demo_pb2.Empty())
+                cat_response = product_catalog_stub.ListProducts(
+                    demo_pb2.Empty(), timeout=product_catalog_timeout_seconds)
                 response_ids = [x.id for x in cat_response.products]
                 cached_ids = cached_ids + response_ids
                 cached_ids = cached_ids + cached_ids[:len(cached_ids) // 4]
@@ -95,7 +97,8 @@ def get_product_list(request_product_ids):
                 product_ids = cached_ids
         else:
             span.set_attribute("app.recommendation.cache_enabled", False)
-            cat_response = product_catalog_stub.ListProducts(demo_pb2.Empty())
+            cat_response = product_catalog_stub.ListProducts(
+                demo_pb2.Empty(), timeout=product_catalog_timeout_seconds)
             product_ids = [x.id for x in cat_response.products]
 
         span.set_attribute("app.products.count", len(product_ids))
