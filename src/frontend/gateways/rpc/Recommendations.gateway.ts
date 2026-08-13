@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-import { ChannelCredentials } from '@grpc/grpc-js';
+import { ChannelCredentials, Metadata } from '@grpc/grpc-js';
 import { ListRecommendationsResponse, RecommendationServiceClient } from '../../protos/demo';
 import { runtimeAddress } from './runtime';
 
@@ -30,9 +30,11 @@ const RecommendationsGateway = () => ({
         callback();
       };
 
-      const call = recommendationClient.listRecommendations({ userId, productIds }, {
-        deadline: new Date(Date.now() + recommendationDeadlineMs),
-      }, (error, response) => {
+      const call = recommendationClient.listRecommendations(
+        { userId, productIds },
+        new Metadata(),
+        { deadline: new Date(Date.now() + recommendationDeadlineMs) },
+        (error, response) => {
         if (error) {
           complete(() => reject(error));
           return;
@@ -44,7 +46,8 @@ const RecommendationsGateway = () => ({
         }
 
         recommendationResponse = response;
-      });
+        }
+      );
 
       call.on('status', (status) => {
         if (!recommendationResponse) {
