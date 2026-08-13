@@ -124,9 +124,12 @@ def must_map_env(key: str):
 
 
 def check_feature_flag(flag_name: str):
-    # Initialize OpenFeature
     client = api.get_client()
-    return client.get_boolean_value("recommendationCacheFailure", False)
+    try:
+        return client.get_boolean_value(flag_name, False)
+    except Exception as error:
+        logger.warning("Feature flag %s unavailable; using default false: %s", flag_name, error)
+        return False
 
 
 if __name__ == "__main__":
