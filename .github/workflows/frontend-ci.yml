@@ -237,15 +237,29 @@ jobs:
         if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.operation == 'build-dev')
         uses: sigstore/cosign-installer@v3
 
-      - name: Sign image
+      - name: Verify existing image signature
+        id: existing_signature
         if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.operation == 'build-dev')
+        run: |
+          if cosign verify \
+            --certificate-identity "https://github.com/${GITHUB_REPOSITORY}/.github/workflows/frontend-ci.yml@refs/heads/main" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+            "${IMAGE_REF}" >/dev/null; then
+            echo "verified=true" >> "$GITHUB_OUTPUT"
+            echo "Existing immutable image signature verified."
+          else
+            echo "verified=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Sign image
+        if: (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.operation == 'build-dev')) && steps.existing_signature.outputs.verified != 'true'
         run: cosign sign "${IMAGE_REF}"
         env:
           COSIGN_YES: 'true'
 
       # ================= ATTESTATION =================
       - name: Provenance attestation
-        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.operation == 'build-dev')
+        if: (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.operation == 'build-dev')) && steps.existing_signature.outputs.verified != 'true'
         uses: actions/attest-build-provenance@v2
         with:
           subject-name: ${{ env.ECR_REPOSITORY }}
@@ -253,7 +267,7 @@ jobs:
           push-to-registry: true
 
       - name: SBOM attestation
-        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.operation == 'build-dev')
+        if: (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.operation == 'build-dev')) && steps.existing_signature.outputs.verified != 'true'
         run: |
           cosign attest \
             --predicate frontend-sbom.spdx.json \
