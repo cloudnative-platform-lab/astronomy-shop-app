@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-import { ChannelCredentials, Metadata } from '@grpc/grpc-js';
+import { ChannelCredentials } from '@grpc/grpc-js';
 import { ListRecommendationsResponse, RecommendationServiceClient } from '../../protos/demo';
 import { runtimeAddress } from './runtime';
 
@@ -14,8 +14,10 @@ type RecommendationResult = {
 
 const RecommendationsGateway = () => ({
   listRecommendations(userId: string, productIds: string[]) {
-    return new Promise<RecommendationResult>((resolve, reject) =>
-      client().listRecommendations({ userId, productIds }, (error, response, trailers: Metadata) => {
+    return new Promise<RecommendationResult>((resolve, reject) => {
+      let recommendationResponse: ListRecommendationsResponse | undefined;
+
+      const call = client().listRecommendations({ userId, productIds }, (error, response) => {
         if (error) {
           reject(error);
           return;
@@ -26,13 +28,21 @@ const RecommendationsGateway = () => ({
           return;
         }
 
-        const servingRevision = trailers
+        recommendationResponse = response;
+      });
+
+      call.on('status', (status) => {
+        if (!recommendationResponse) {
+          return;
+        }
+
+        const servingRevision = status.metadata
           .get('x-astronomy-shop-recommendation-revision')
           .find((value): value is string => typeof value === 'string');
 
-        resolve({ response, servingRevision });
+        resolve({ response: recommendationResponse, servingRevision });
       })
-    );
+    });
   },
 });
 
