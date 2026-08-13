@@ -50,7 +50,8 @@ const RecommendationsGateway = () => ({
       );
 
       call.on('status', (status) => {
-        if (!recommendationResponse) {
+        const response = recommendationResponse;
+        if (!response) {
           return;
         }
 
@@ -58,7 +59,7 @@ const RecommendationsGateway = () => ({
           .get('x-astronomy-shop-recommendation-revision')
           .find((value): value is string => typeof value === 'string');
 
-        complete(() => resolve({ response: recommendationResponse, servingRevision }));
+        complete(() => resolve({ response, servingRevision }));
       });
     });
   },
