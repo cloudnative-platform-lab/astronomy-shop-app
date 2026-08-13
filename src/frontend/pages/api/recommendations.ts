@@ -16,13 +16,18 @@ const handler = async ({ method, query }: NextApiRequest, res: NextApiResponse<T
       const requestedProductIds = Array.isArray(productIds)
         ? productIds
         : productIds.split(',').filter(Boolean);
-      const { productIds: productList } = await RecommendationsGateway.listRecommendations(
+      const { response, servingRevision } = await RecommendationsGateway.listRecommendations(
         sessionId as string,
         requestedProductIds
       );
+      const { productIds: productList } = response;
       const recommendedProductList = await Promise.all(
         productList.slice(0, 4).map(id => ProductCatalogService.getProduct(id, currencyCode as string))
       );
+
+      if (process.env.EXPOSE_RECOMMENDATION_REVISION_HEADERS === 'true' && servingRevision) {
+        res.setHeader('X-Astronomy-Shop-Recommendation-Revision', servingRevision);
+      }
 
       return res.status(200).json(recommendedProductList);
     }

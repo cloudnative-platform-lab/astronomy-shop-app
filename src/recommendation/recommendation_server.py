@@ -42,6 +42,9 @@ first_run = True
 class RecommendationService(demo_pb2_grpc.RecommendationServiceServicer):
     def ListRecommendations(self, request, context):
         prod_list = get_product_list(request.product_ids)
+        context.set_trailing_metadata((
+            ('x-astronomy-shop-recommendation-revision', os.environ.get('ASTRONOMY_SHOP_SERVING_REVISION', 'unknown')),
+        ))
         span = trace.get_current_span()
         span.set_attribute("app.products_recommended.count", len(prod_list))
         logger.info(f"Receive ListRecommendations for product ids:{prod_list}")
