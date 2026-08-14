@@ -140,7 +140,7 @@ if __name__ == "__main__":
     if os.environ.get('FEATURE_FLAGS_ENABLED', 'true').lower() == 'true':
         api.set_provider(FlagdProvider(host=os.environ.get('FLAGD_HOST', 'flagd'), port=os.environ.get('FLAGD_PORT', 8013)))
     else:
-        logger.info("Feature flags disabled; using OpenFeature defaults")
+        logging.getLogger('main').info("Feature flags disabled; using OpenFeature defaults")
     api.add_hooks([TracingHook()])
 
     # Initialize Traces and Metrics
